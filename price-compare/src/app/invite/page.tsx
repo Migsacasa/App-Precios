@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { redirect } from "next/navigation";
 import { Mail, Phone, Send, Clock, Loader2, UserPlus, ExternalLink } from "lucide-react";
+import { toast } from "sonner";
+import { ApiClientError, apiFetchJson, formatApiError } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 
 type InviteType = "email" | "whatsapp";
@@ -28,17 +30,35 @@ export default function InvitePage() {
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [loading, setLoading] = useState(true);
 
+  function showApiErrorToast(err: unknown, fallback: string) {
+    const message = formatApiError(err, fallback);
+    if (err instanceof ApiClientError && err.requestId) {
+      toast.error(message, {
+        action: {
+          label: "Copy ID",
+          onClick: async () => {
+            try {
+              await navigator.clipboard.writeText(err.requestId!);
+              toast.success("Request ID copied");
+            } catch {
+              toast.error("Could not copy request ID");
+            }
+          },
+        },
+      });
+      return;
+    }
+    toast.error(message);
+  }
+
   if (authStatus === "unauthenticated") redirect("/login");
 
   const fetchInvitations = useCallback(async () => {
     try {
-      const res = await fetch("/api/invite");
-      if (res.ok) {
-        const data = await res.json();
-        setInvitations(data);
-      }
-    } catch {
-      // silent
+      const data = await apiFetchJson<Invitation[]>("/api/invite");
+      setInvitations(data);
+    } catch (err) {
+      setError(formatApiError(err, "Could not load invitations"));
     } finally {
       setLoading(false);
     }
@@ -55,7 +75,7 @@ export default function InvitePage() {
     setSending(true);
 
     try {
-      const res = await fetch("/api/invite", {
+      const data = await apiFetchJson<{ whatsappUrl?: string }>("/api/invite", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -64,13 +84,6 @@ export default function InvitePage() {
           message: message.trim() || undefined,
         }),
       });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setError(data.error || "Failed to send invitation");
-        return;
-      }
 
       // For WhatsApp, open the link in a new tab
       if (inviteType === "whatsapp" && data.whatsappUrl) {
@@ -85,8 +98,10 @@ export default function InvitePage() {
       setTarget("");
       setMessage("");
       fetchInvitations();
-    } catch {
-      setError("Network error. Please try again.");
+    } catch (err) {
+      const message = formatApiError(err, "Network error. Please try again.");
+      setError(message);
+      showApiErrorToast(err, "Failed to send invitation");
     } finally {
       setSending(false);
     }
