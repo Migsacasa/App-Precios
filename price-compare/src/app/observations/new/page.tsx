@@ -10,18 +10,18 @@ export default async function NewObservationPage() {
 
   const [stores, products] = await Promise.all([
     prisma.store.findMany({
-      where: { isActive: true },
-      orderBy: [{ city: "asc" }, { customerName: "asc" }],
+      where: { active: true },
+      orderBy: [{ city: "asc" }, { name: "asc" }],
       select: {
         id: true,
         customerCode: true,
-        customerName: true,
+        name: true,
         city: true,
         lat: true,
         lng: true,
       },
     }),
-    prisma.ourProduct.findMany({ where: { isActive: true }, orderBy: [{ segment: "asc" }, { productName: "asc" }] }),
+    prisma.product.findMany({ where: { active: true }, orderBy: [{ segment: "asc" }, { name: "asc" }] }),
   ]);
 
   return (
@@ -31,18 +31,17 @@ export default async function NewObservationPage() {
         initialStores={stores.map((store) => ({
           id: store.id,
           customerCode: store.customerCode,
-          customerName: store.customerName,
+          name: store.name,
           city: store.city,
-          lat: store.lat,
-          lng: store.lng,
+          lat: Number(store.lat),
+          lng: Number(store.lng),
         }))}
         productRefs={products.map((p) => ({
           id: p.id,
           segment: p.segment,
-          productName: p.productName,
-          specs: p.specs,
-          ourPrice: Number(p.ourPrice),
-          referencePhotoUrl: p.referencePhotoUrl,
+          name: p.name,
+          brand: p.brand,
+          category: p.category,
         }))}
       />
     </div>

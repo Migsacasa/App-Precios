@@ -12,7 +12,7 @@ export default async function AdminStoresPage() {
   if (session.user.role !== "ADMIN") redirect("/observations");
 
   const stores = await prisma.store.findMany({
-    orderBy: [{ city: "asc" }, { customerName: "asc" }],
+    orderBy: [{ city: "asc" }, { name: "asc" }],
   });
 
   return (
@@ -25,13 +25,14 @@ export default async function AdminStoresPage() {
         stores={stores.map((store) => ({
           id: store.id,
           customerCode: store.customerCode,
-          customerName: store.customerName,
+          name: store.name,
           chain: store.chain ?? "",
           city: store.city ?? "",
-          address: store.address ?? "",
-          lat: store.lat,
-          lng: store.lng,
-          isActive: store.isActive,
+          zone: store.zone ?? "",
+          route: store.route ?? "",
+          lat: Number(store.lat),
+          lng: Number(store.lng),
+          active: store.active,
         }))}
       />
     </div>

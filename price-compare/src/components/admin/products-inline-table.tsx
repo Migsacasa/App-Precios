@@ -5,12 +5,12 @@ import { toast } from "sonner";
 
 type ProductRow = {
   id: string;
+  sku: string;
   segment: "LUBRICANTS" | "BATTERIES" | "TIRES";
-  productName: string;
-  specs: string;
-  ourPrice: number;
-  referencePhotoUrl: string;
-  isActive: boolean;
+  name: string;
+  brand: string;
+  category: string;
+  active: boolean;
 };
 
 export function ProductsInlineTable({ initialRows }: { initialRows: ProductRow[] }) {
@@ -24,12 +24,12 @@ export function ProductsInlineTable({ initialRows }: { initialRows: ProductRow[]
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          sku: row.sku,
           segment: row.segment,
-          productName: row.productName,
-          specs: row.specs,
-          ourPrice: row.ourPrice,
-          referencePhotoUrl: row.referencePhotoUrl,
-          isActive: row.isActive,
+          name: row.name,
+          brand: row.brand,
+          category: row.category,
+          active: row.active,
         }),
       });
 
@@ -37,7 +37,7 @@ export function ProductsInlineTable({ initialRows }: { initialRows: ProductRow[]
         throw new Error(await res.text());
       }
 
-      toast.success(`Updated ${row.productName}`);
+      toast.success(`Updated ${row.name}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to update";
       toast.error(message);
@@ -51,11 +51,11 @@ export function ProductsInlineTable({ initialRows }: { initialRows: ProductRow[]
       <table className="w-full text-sm">
         <thead className="bg-gray-50">
           <tr>
+            <th className="text-left p-2">SKU</th>
             <th className="text-left p-2">Segment</th>
-            <th className="text-left p-2">Product</th>
-            <th className="text-left p-2">Specs</th>
-            <th className="text-right p-2">Our Price</th>
-            <th className="text-left p-2">Reference Photo URL</th>
+            <th className="text-left p-2">Name</th>
+            <th className="text-left p-2">Brand</th>
+            <th className="text-left p-2">Category</th>
             <th className="text-left p-2">Active</th>
             <th className="text-right p-2">Action</th>
           </tr>
@@ -63,6 +63,15 @@ export function ProductsInlineTable({ initialRows }: { initialRows: ProductRow[]
         <tbody>
           {rows.map((row, index) => (
             <tr key={row.id} className="border-t">
+              <td className="p-2">
+                <input
+                  className="w-28 border rounded px-2 py-1 bg-white text-black"
+                  value={row.sku}
+                  onChange={(event) => {
+                    setRows((prev) => prev.map((item, i) => (i === index ? { ...item, sku: event.target.value } : item)));
+                  }}
+                />
+              </td>
               <td className="p-2">
                 <select
                   className="border rounded px-2 py-1"
@@ -80,52 +89,36 @@ export function ProductsInlineTable({ initialRows }: { initialRows: ProductRow[]
               <td className="p-2">
                 <input
                   className="border rounded px-2 py-1 bg-white text-black"
-                  value={row.productName}
+                  value={row.name}
                   onChange={(event) => {
-                    setRows((prev) => prev.map((item, i) => (i === index ? { ...item, productName: event.target.value } : item)));
+                    setRows((prev) => prev.map((item, i) => (i === index ? { ...item, name: event.target.value } : item)));
                   }}
                 />
               </td>
               <td className="p-2">
                 <input
                   className="border rounded px-2 py-1 bg-white text-black"
-                  value={row.specs}
+                  value={row.brand}
                   onChange={(event) => {
-                    setRows((prev) => prev.map((item, i) => (i === index ? { ...item, specs: event.target.value } : item)));
-                  }}
-                />
-              </td>
-              <td className="p-2 text-right">
-                <input
-                  className="w-28 border rounded px-2 py-1 text-right bg-white text-black"
-                  value={row.ourPrice}
-                  onChange={(event) => {
-                    const value = Number(event.target.value);
-                    setRows((prev) =>
-                      prev.map((item, i) => (i === index ? { ...item, ourPrice: value } : item))
-                    );
+                    setRows((prev) => prev.map((item, i) => (i === index ? { ...item, brand: event.target.value } : item)));
                   }}
                 />
               </td>
               <td className="p-2">
                 <input
-                  className="w-full border rounded px-2 py-1 bg-white text-black"
-                  value={row.referencePhotoUrl}
+                  className="border rounded px-2 py-1 bg-white text-black"
+                  value={row.category}
                   onChange={(event) => {
-                    setRows((prev) =>
-                      prev.map((item, i) =>
-                        i === index ? { ...item, referencePhotoUrl: event.target.value } : item,
-                      )
-                    );
+                    setRows((prev) => prev.map((item, i) => (i === index ? { ...item, category: event.target.value } : item)));
                   }}
                 />
               </td>
               <td className="p-2">
                 <input
                   type="checkbox"
-                  checked={row.isActive}
+                  checked={row.active}
                   onChange={(event) => {
-                    setRows((prev) => prev.map((item, i) => (i === index ? { ...item, isActive: event.target.checked } : item)));
+                    setRows((prev) => prev.map((item, i) => (i === index ? { ...item, active: event.target.checked } : item)));
                   }}
                 />
               </td>

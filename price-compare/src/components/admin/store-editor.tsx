@@ -12,13 +12,14 @@ const StoreMapPicker = dynamic(
 type StoreOption = {
   id: string;
   customerCode: string;
-  customerName: string;
+  name: string;
   chain: string;
   city: string;
-  address: string;
+  zone: string;
+  route: string;
   lat: number;
   lng: number;
-  isActive: boolean;
+  active: boolean;
 };
 
 export function StoreEditor({ stores }: { stores: StoreOption[] }) {
@@ -30,7 +31,7 @@ export function StoreEditor({ stores }: { stores: StoreOption[] }) {
     const q = query.trim().toLowerCase();
     if (!q) return stores;
     return stores.filter((store) =>
-      `${store.customerCode} ${store.customerName} ${store.city} ${store.chain}`.toLowerCase().includes(q)
+      `${store.customerCode} ${store.name} ${store.city} ${store.chain}`.toLowerCase().includes(q)
     );
   }, [stores, query]);
 
@@ -55,13 +56,14 @@ export function StoreEditor({ stores }: { stores: StoreOption[] }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           customerCode: form.customerCode,
-          customerName: form.customerName,
+          name: form.name,
           chain: form.chain,
           city: form.city,
-          address: form.address,
+          zone: form.zone,
+          route: form.route,
           lat: form.lat,
           lng: form.lng,
-          isActive: form.isActive,
+          active: form.active,
         }),
       });
 
@@ -97,7 +99,7 @@ export function StoreEditor({ stores }: { stores: StoreOption[] }) {
                 setForm(store);
               }}
             >
-              <p className="text-sm font-medium">{store.customerCode} · {store.customerName}</p>
+              <p className="text-sm font-medium">{store.customerCode} · {store.name}</p>
               <p className="text-xs opacity-80">
                 {store.city || "No city"}
               </p>
@@ -118,9 +120,9 @@ export function StoreEditor({ stores }: { stores: StoreOption[] }) {
           />
           <input
             className="border rounded px-3 py-2"
-            value={form.customerName}
-            onChange={(event) => setForm({ ...form, customerName: event.target.value })}
-            placeholder="Customer Name"
+            value={form.name}
+            onChange={(event) => setForm({ ...form, name: event.target.value })}
+            placeholder="Store Name"
           />
           <input
             className="border rounded px-3 py-2"
@@ -136,9 +138,15 @@ export function StoreEditor({ stores }: { stores: StoreOption[] }) {
           />
           <input
             className="border rounded px-3 py-2"
-            value={form.address}
-            onChange={(event) => setForm({ ...form, address: event.target.value })}
-            placeholder="Address"
+            value={form.zone}
+            onChange={(event) => setForm({ ...form, zone: event.target.value })}
+            placeholder="Zone"
+          />
+          <input
+            className="border rounded px-3 py-2"
+            value={form.route}
+            onChange={(event) => setForm({ ...form, route: event.target.value })}
+            placeholder="Route"
           />
           <input
             className="border rounded px-3 py-2"
@@ -157,8 +165,8 @@ export function StoreEditor({ stores }: { stores: StoreOption[] }) {
         <label className="inline-flex items-center gap-2 text-sm">
           <input
             type="checkbox"
-            checked={form.isActive}
-            onChange={(event) => setForm({ ...form, isActive: event.target.checked })}
+            checked={form.active}
+            onChange={(event) => setForm({ ...form, active: event.target.checked })}
           />
           Active store
         </label>

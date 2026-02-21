@@ -8,7 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { saveUpload, UploadValidationError } from "@/lib/upload";
 import { analyzeStorePhotos, analysisSchema } from "@/lib/store-evaluation-ai";
 import { logAudit } from "@/lib/audit";
-import { AiStoreEvaluationSchema, AI_SCHEMA_VERSION } from "@/lib/schemas/evaluation";
+import { AiStoreEvaluationSchema, AI_SCHEMA_VERSION, assignRating } from "@/lib/schemas/evaluation";
 import type { Prisma, PhotoType } from "@prisma/client";
 
 const slotSchema = z.object({
@@ -24,8 +24,8 @@ const payloadSchema = z.object({
   storeId: z.string().min(1),
   clientEvaluationId: z.string().optional(),
   notes: z.string().optional(),
-  gpsAtCaptureLat: z.number().optional(),
-  gpsAtCaptureLng: z.number().optional(),
+  observedLat: z.number().optional(),
+  observedLng: z.number().optional(),
   ai: AiStoreEvaluationSchema.optional(),
   slots: z.array(slotSchema),
 });
@@ -67,7 +67,6 @@ function buildSlotsFromForm(form: FormData) {
     })),
   ]
     .map((item) => {
-      // Auto-calc priceIndex if competitorPrice and ourPrice are provided and priceIndex is missing
       let priceIndex = item.priceIndex;
       if (priceIndex == null && item.competitorPrice != null && item.ourPrice != null && item.ourPrice > 0) {
         priceIndex = Math.round((item.competitorPrice / item.ourPrice) * 100) / 100;
@@ -103,19 +102,22 @@ export async function GET() {
 
   const [stores, products] = await Promise.all([
     prisma.store.findMany({
-      where: { isActive: true },
-      orderBy: [{ city: "asc" }, { customerName: "asc" }],
+      where: { active: true },
+      orderBy: [{ city: "asc" }, { name: "asc" }],
       select: {
         id: true,
         customerCode: true,
-        customerName: true,
+        name: true,
         city: true,
         zone: true,
         lat: true,
         lng: true,
       },
     }),
-    prisma.ourProduct.findMany({ where: { isActive: true }, orderBy: [{ segment: "asc" }, { productName: "asc" }] }),
+    prisma.product.findMany({
+      where: { active: true },
+      orderBy: [{ segment: "asc" }, { name: "asc" }],
+    }),
   ]);
 
   return NextResponse.json({ stores, products });
@@ -128,15 +130,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // FIELD can only create evaluations
   const role = (session.user as { role?: string }).role ?? "FIELD";
 
   const form = await req.formData();
   const storeId = String(form.get("storeId") ?? "").trim();
   const clientEvaluationId = String(form.get("clientEvaluationId") ?? "").trim() || undefined;
   const notes = String(form.get("notes") ?? "").trim() || undefined;
-  const gpsAtCaptureLat = parseNumber(form.get("gpsAtCaptureLat"));
-  const gpsAtCaptureLng = parseNumber(form.get("gpsAtCaptureLng"));
+  const observedLat = parseNumber(form.get("gpsAtCaptureLat"));
+  const observedLng = parseNumber(form.get("gpsAtCaptureLng"));
   const slots = buildSlotsFromForm(form);
 
   if (!storeId) {
@@ -145,7 +146,7 @@ export async function POST(req: NextRequest) {
 
   // Dedup: if clientEvaluationId exists, check for duplicate
   if (clientEvaluationId) {
-    const existing = await prisma.storeEvaluation.findUnique({
+    const existing = await prisma.evaluation.findUnique({
       where: { clientEvaluationId },
       select: { id: true },
     });
@@ -200,40 +201,39 @@ export async function POST(req: NextRequest) {
   }
 
   // AI analysis
-  let aiOverallRating: "GOOD" | "REGULAR" | "BAD" | "NEEDS_REVIEW" | "NO_IMAGE" = "NO_IMAGE";
+  let aiRating: "GOOD" | "REGULAR" | "BAD" | "NEEDS_REVIEW" | undefined;
   let aiScore: number | null = null;
   let aiConfidence: number | null = null;
-  let aiSummary: string | undefined;
-  let aiWhyBullets: Prisma.InputJsonValue | undefined;
-  let aiEvidence: Prisma.InputJsonValue | undefined;
-  let aiRecommendations: Prisma.InputJsonValue | undefined;
-  let aiJson: Prisma.InputJsonValue | undefined;
+  let aiOutputJson: Prisma.InputJsonValue | undefined;
+  let aiFindings: Array<{ type: string; severity: string; detail: string; segment?: string; tags?: string[] }> = [];
+  let aiRecommendations: Array<{ priority: string; action: string; rationale?: string; ownerRole?: string; segment?: string }> = [];
 
   // Try client-supplied AI data first
   const aiRaw = form.get("aiJson");
   if (typeof aiRaw === "string" && aiRaw.trim()) {
     try {
       const parsed = AiStoreEvaluationSchema.parse(JSON.parse(aiRaw));
-      aiOverallRating = parsed.rating;
+      aiRating = parsed.rating;
       aiScore = parsed.score;
       aiConfidence = parsed.confidence;
-      aiSummary = parsed.summary;
-      aiWhyBullets = parsed.whyBullets as Prisma.InputJsonValue;
-      aiEvidence = parsed.evidence as unknown as Prisma.InputJsonValue;
-      aiRecommendations = parsed.recommendations as unknown as Prisma.InputJsonValue;
-      aiJson = parsed as unknown as Prisma.InputJsonValue;
+      aiOutputJson = parsed as unknown as Prisma.InputJsonValue;
+      aiFindings = (parsed.evidence ?? []).map((e) => ({
+        type: e.type, severity: e.severity, detail: e.detail, segment: e.segment, tags: e.tags,
+      }));
+      aiRecommendations = (parsed.recommendations ?? []).map((r) => ({
+        priority: r.priority, action: r.action, rationale: r.rationale, ownerRole: r.ownerRole, segment: r.segment,
+      }));
     } catch (e) {
       console.warn("Failed to parse client-supplied aiJson:", e);
     }
   }
 
   // Server-side AI if no client AI and photos exist
-  if (!aiJson && uploadedPhotos.length > 0) {
+  if (!aiOutputJson && uploadedPhotos.length > 0) {
     try {
-      // Fetch store context for richer AI prompts
       const storeData = await prisma.store.findUnique({
         where: { id: storeId },
-        select: { id: true, customerCode: true, customerName: true, city: true, zone: true },
+        select: { id: true, customerCode: true, name: true, city: true, zone: true },
       });
       const analysis = await analyzeStorePhotos(
         uploadedPhotos.map((p) => p.url),
@@ -241,40 +241,44 @@ export async function POST(req: NextRequest) {
           store: storeData ? {
             storeId: storeData.id,
             customerCode: storeData.customerCode,
-            name: storeData.customerName,
+            name: storeData.name,
             city: storeData.city ?? undefined,
             zone: storeData.zone ?? undefined,
           } : undefined,
           photoTypes: uploadedPhotos.map((p) => p.photoType as "WIDE_SHOT" | "SHELF_CLOSEUP" | "OTHER"),
         },
       );
-      aiOverallRating = analysis.rating;
+      aiRating = analysis.rating;
       aiScore = analysis.score;
       aiConfidence = analysis.confidence;
-      aiSummary = analysis.summary;
-      aiWhyBullets = analysis.whyBullets as Prisma.InputJsonValue;
-      aiEvidence = analysis.evidence as unknown as Prisma.InputJsonValue;
-      aiRecommendations = analysis.recommendations as unknown as Prisma.InputJsonValue;
-      aiJson = analysis as unknown as Prisma.InputJsonValue;
+      aiOutputJson = analysis as unknown as Prisma.InputJsonValue;
+      aiFindings = (analysis.evidence ?? []).map((e) => ({
+        type: e.type, severity: e.severity, detail: e.detail, segment: e.segment, tags: e.tags,
+      }));
+      aiRecommendations = (analysis.recommendations ?? []).map((r) => ({
+        priority: r.priority, action: r.action, rationale: r.rationale, ownerRole: r.ownerRole, segment: r.segment,
+      }));
     } catch {
-      aiOverallRating = "NEEDS_REVIEW";
+      aiRating = "NEEDS_REVIEW";
       aiScore = 0;
       aiConfidence = 0;
-      aiSummary = "Photo captured. AI analysis unavailable at save time.";
-      aiWhyBullets = ["AI analysis was not available during upload"] as Prisma.InputJsonValue;
-      aiEvidence = [{ type: "OTHER", detail: "Fallback response used", severity: "HIGH" }] as unknown as Prisma.InputJsonValue;
-      aiRecommendations = [{ priority: "P0", action: "Review photo later — no real-time AI response", rationale: "Ensure quality feedback" }] as unknown as Prisma.InputJsonValue;
-      aiJson = {
+      aiOutputJson = {
         schemaVersion: AI_SCHEMA_VERSION,
         rating: "NEEDS_REVIEW", score: 0, confidence: 0,
         subScores: { visibility: 0, shelfShare: 0, placement: 0, availability: 0 },
-        summary: aiSummary,
-        whyBullets: aiWhyBullets,
-        evidence: aiEvidence,
-        recommendations: aiRecommendations,
+        summary: "Photo captured. AI analysis unavailable at save time.",
+        whyBullets: ["AI analysis was not available during upload"],
+        evidence: [{ type: "OTHER", detail: "Fallback response used", severity: "HIGH" }],
+        recommendations: [{ priority: "P0", action: "Review photo later — no real-time AI response", rationale: "Ensure quality feedback" }],
       } as unknown as Prisma.InputJsonValue;
+      aiFindings = [{ type: "OTHER", severity: "HIGH", detail: "Fallback response used" }];
+      aiRecommendations = [{ priority: "P0", action: "Review photo later — no real-time AI response", rationale: "Ensure quality feedback" }];
     }
   }
+
+  // Compute finalRating
+  const finalRating = aiRating ?? null;
+  const needsReview = aiRating === "NEEDS_REVIEW" || (aiConfidence != null && aiConfidence < 0.35);
 
   // Validate full payload
   let parsedPayload;
@@ -283,9 +287,9 @@ export async function POST(req: NextRequest) {
       storeId,
       clientEvaluationId,
       notes,
-      gpsAtCaptureLat,
-      gpsAtCaptureLng,
-      ai: aiJson && typeof aiJson === "object" ? aiJson : undefined,
+      observedLat,
+      observedLng,
+      ai: aiOutputJson && typeof aiOutputJson === "object" ? aiOutputJson : undefined,
       slots,
     });
   } catch (e) {
@@ -294,57 +298,82 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const evaluation = await prisma.storeEvaluation.create({
+    const evaluation = await prisma.evaluation.create({
       data: {
         storeId: parsedPayload.storeId,
         clientEvaluationId: parsedPayload.clientEvaluationId,
-        evaluatorUserId: userId,
+        createdById: userId,
         capturedAt: new Date(),
-        notes: parsedPayload.notes,
-        gpsAtCaptureLat: parsedPayload.gpsAtCaptureLat,
-        gpsAtCaptureLng: parsedPayload.gpsAtCaptureLng,
-        aiOverallRating,
+        observedLat: parsedPayload.observedLat,
+        observedLng: parsedPayload.observedLng,
+        aiRating: aiRating ?? null,
         aiScore,
         aiConfidence,
-        aiSummary,
-        aiWhyBullets: aiWhyBullets ?? undefined,
-        aiEvidence: aiEvidence ?? undefined,
-        aiRecommendations: aiRecommendations ?? undefined,
-        aiJson: aiJson ?? undefined,
-        syncStatus: "SYNCED",
+        finalRating,
+        needsReview,
+        hasPhotos: uploadedPhotos.length > 0,
+        latestPhotoThumbUrl: uploadedPhotos[0]?.url ?? null,
         photos: uploadedPhotos.length > 0
           ? {
               create: uploadedPhotos.map((p) => ({
                 url: p.url,
-                mime: p.mime,
                 photoType: p.photoType,
-                sortOrder: p.sortOrder,
               })),
             }
           : undefined,
-        segmentInputs: {
+        segmentIndices: {
           create: parsedPayload.slots.map((item) => ({
             segment: item.segment,
             slot: item.slot,
             priceIndex: item.priceIndex,
             competitorPrice: item.competitorPrice ?? null,
             ourPrice: item.ourPrice ?? null,
-            isManualOverride: item.isManualOverride ?? false,
+            source: item.isManualOverride ? "MANUAL" : "AUTO_CALC",
           })),
         },
+        // Create normalized AI records
+        ...(aiOutputJson ? {
+          aiEvaluation: {
+            create: {
+              schemaVersion: AI_SCHEMA_VERSION,
+              modelName: process.env.OPENAI_MODEL_VISION ?? "gpt-4.1-mini",
+              promptVersion: "v1",
+              outputJson: aiOutputJson,
+            },
+          },
+          aiFindings: aiFindings.length > 0 ? {
+            create: aiFindings.map((f) => ({
+              type: f.type as "VISIBILITY" | "SHELF_SHARE" | "PLACEMENT" | "AVAILABILITY" | "BRANDING" | "PRICING" | "OTHER",
+              severity: f.severity as "LOW" | "MEDIUM" | "HIGH",
+              detail: f.detail,
+              segment: f.segment as "LUBRICANTS" | "BATTERIES" | "TIRES" | undefined ?? undefined,
+              tags: f.tags ?? [],
+            })),
+          } : undefined,
+          aiRecommendations: aiRecommendations.length > 0 ? {
+            create: aiRecommendations.map((r) => ({
+              priority: r.priority as "P0" | "P1" | "P2",
+              action: r.action,
+              rationale: r.rationale,
+              ownerRole: r.ownerRole as "FIELD" | "MANAGER" | "ADMIN" | undefined ?? undefined,
+              segment: r.segment as "LUBRICANTS" | "BATTERIES" | "TIRES" | undefined ?? undefined,
+            })),
+          } : undefined,
+        } : {}),
       },
     });
 
     // Audit log
     await logAudit({
-      event: "evaluation.created",
-      userId,
-      evaluationId: evaluation.id,
-      storeId: parsedPayload.storeId,
-      metadata: {
+      action: "EVALUATION_CREATED",
+      actorId: userId,
+      entityType: "Evaluation",
+      entityId: evaluation.id,
+      meta: {
         role,
+        storeId: parsedPayload.storeId,
         photoCount: uploadedPhotos.length,
-        aiRating: aiOverallRating,
+        aiRating,
         aiScore,
         slotCount: parsedPayload.slots.length,
         offline: !!clientEvaluationId,

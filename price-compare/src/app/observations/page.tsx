@@ -18,29 +18,29 @@ export default async function ObservationsPage({
   const params = await searchParams;
   const currentPage = Math.max(1, parseInt(params?.page ?? "1", 10) || 1);
 
-  let evaluations: Awaited<ReturnType<typeof prisma.storeEvaluation.findMany<{
-    include: { store: true; segmentInputs: true; photos: true; evaluatorUser: true };
+  let evaluations: Awaited<ReturnType<typeof prisma.evaluation.findMany<{
+    include: { store: true; segmentIndices: true; photos: true; createdBy: true };
   }>>> = [];
   let totalCount = 0;
   let error: string | null = null;
 
-  const where = session.user.role === "FIELD" ? { evaluatorUserId: session.user.id } : undefined;
+  const where = session.user.role === "FIELD" ? { createdById: session.user.id } : undefined;
 
   try {
     [evaluations, totalCount] = await Promise.all([
-      prisma.storeEvaluation.findMany({
+      prisma.evaluation.findMany({
         where,
         orderBy: { capturedAt: "desc" },
         skip: (currentPage - 1) * PAGE_SIZE,
         take: PAGE_SIZE,
         include: {
           store: true,
-          segmentInputs: true,
+          segmentIndices: true,
           photos: true,
-          evaluatorUser: true,
+          createdBy: true,
         },
       }),
-      prisma.storeEvaluation.count({ where }),
+      prisma.evaluation.count({ where }),
     ]);
   } catch (e) {
     console.error("Failed to load evaluations:", e);
@@ -92,11 +92,11 @@ export default async function ObservationsPage({
               <tr key={evaluation.id} className="border-t">
                 <td className="p-2">{evaluation.capturedAt.toISOString().slice(0, 10)}</td>
                 <td className="p-2">
-                  {evaluation.store.customerCode} · {evaluation.store.customerName}
+                  {evaluation.store.customerCode} · {evaluation.store.name}
                 </td>
-                <td className="p-2">{evaluation.evaluatorUser.name || evaluation.evaluatorUser.email}</td>
-                <td className="p-2">{evaluation.aiOverallRating}</td>
-                <td className="p-2 text-right">{evaluation.segmentInputs.length}</td>
+                <td className="p-2">{evaluation.createdBy.name || evaluation.createdBy.email}</td>
+                <td className="p-2">{evaluation.aiRating ?? "PENDING"}</td>
+                <td className="p-2 text-right">{evaluation.segmentIndices.length}</td>
                 <td className="p-2">
                   {evaluation.photos[0]?.url ? (
                     <a className="underline" href={evaluation.photos[0].url} target="_blank" rel="noopener noreferrer">

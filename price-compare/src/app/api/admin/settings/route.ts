@@ -33,9 +33,11 @@ export async function POST(req: NextRequest) {
 
     await setSetting(parsed.data.key, parsed.data.value);
     await logAudit({
-      event: "settings.updated",
-      userId: session.user!.id,
-      metadata: { key: parsed.data.key, value: parsed.data.value },
+      action: "STORE_UPDATED",
+      actorId: session.user!.id,
+      entityType: "Settings",
+      entityId: parsed.data.key,
+      meta: { key: parsed.data.key, value: parsed.data.value },
     });
 
     return NextResponse.json({ ok: true });

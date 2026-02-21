@@ -5,11 +5,12 @@ import { requireAdmin, requireRole, SecurityError } from "@/lib/security";
 
 const schema = z.object({
   customerCode: z.string().min(1),
-  customerName: z.string().min(2),
+  name: z.string().min(2),
   lat: z.coerce.number().min(-90).max(90),
   lng: z.coerce.number().min(-180).max(180),
   city: z.string().optional(),
-  address: z.string().optional(),
+  zone: z.string().optional(),
+  route: z.string().optional(),
   chain: z.string().optional(),
 });
 
@@ -18,17 +19,18 @@ export async function GET() {
     await requireRole("FIELD");
 
     const stores = await prisma.store.findMany({
-      orderBy: [{ city: "asc" }, { customerName: "asc" }],
+      orderBy: [{ city: "asc" }, { name: "asc" }],
       select: {
         id: true,
         customerCode: true,
-        customerName: true,
+        name: true,
         lat: true,
         lng: true,
         city: true,
-        address: true,
+        zone: true,
+        route: true,
         chain: true,
-        isActive: true,
+        active: true,
       },
     });
 
@@ -51,11 +53,12 @@ export async function POST(req: NextRequest) {
     const store = await prisma.store.create({
       data: {
         customerCode: parsed.customerCode.trim(),
-        customerName: parsed.customerName.trim(),
+        name: parsed.name.trim(),
         lat: parsed.lat,
         lng: parsed.lng,
         city: parsed.city?.trim() || null,
-        address: parsed.address?.trim() || null,
+        zone: parsed.zone?.trim() || null,
+        route: parsed.route?.trim() || null,
         chain: parsed.chain?.trim() || null,
       },
     });

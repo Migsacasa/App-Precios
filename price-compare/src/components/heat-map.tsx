@@ -7,24 +7,22 @@ import { CircleMarker, MapContainer, Popup, TileLayer } from "react-leaflet";
 type HeatPoint = {
   storeId: string;
   customerCode: string;
-  customerName: string;
+  name: string;
   lat: number;
   lng: number;
   city: string | null;
   zone?: string | null;
-  rating: "GOOD" | "REGULAR" | "BAD" | "NEEDS_REVIEW" | "NO_IMAGE";
+  rating: "GOOD" | "REGULAR" | "BAD" | "NEEDS_REVIEW";
   color: "green" | "yellow" | "red" | "orange" | "black";
   isStale?: boolean;
   score?: number | null;
   confidence?: number | null;
   lastEvaluationAt: string | null;
-  summary?: string | null;
-  whyBullets?: string[];
-  evidence?: Array<{ type: string; detail: string; severity: string }>;
-  recommendations?: Array<{ priority: string; action: string; rationale?: string }>;
-  segmentInputs?: Array<{ segment: string; slot: number; priceIndex: number }>;
+  findings?: Array<{ type: string; detail: string; severity: string }>;
+  recommendations?: Array<{ priority: string; action: string; rationale?: string | null }>;
+  segmentIndices?: Array<{ segment: string; slot: number; priceIndex: number }>;
   photoUrls?: string[];
-  overrideRating?: string | null;
+  finalRating?: string | null;
 };
 
 function markerColor(color: HeatPoint["color"]) {
@@ -84,7 +82,7 @@ export function HeatMap({ points }: { points: HeatPoint[] }) {
               <Popup>
                 <div className="space-y-1 text-xs">
                   <p><b>{point.customerCode}</b></p>
-                  <p>{point.customerName}</p>
+                  <p>{point.name}</p>
                   {point.city && <p>{point.city}</p>}
                   <p>Rating: {point.rating}{point.isStale ? " (stale)" : ""}</p>
                   {point.score != null && <p>Score: {point.score}/100</p>}
@@ -115,16 +113,16 @@ export function HeatMap({ points }: { points: HeatPoint[] }) {
                 </button>
               </div>
 
-              <p className="text-sm font-medium">{selected.customerName}</p>
+              <p className="text-sm font-medium">{selected.name}</p>
               {selected.city && <p className="text-xs opacity-70">{selected.city}{selected.zone ? ` · Zone: ${selected.zone}` : ""}</p>}
 
               <div className="flex items-center gap-2 flex-wrap">
                 <span className={`px-2 py-0.5 rounded text-xs font-semibold ${ratingBadge(selected.rating)}`}>
                   {selected.rating}
                 </span>
-                {selected.overrideRating && (
-                  <span className={`px-2 py-0.5 rounded text-xs font-semibold ${ratingBadge(selected.overrideRating)}`}>
-                    Override: {selected.overrideRating}
+                {selected.finalRating && (
+                  <span className={`px-2 py-0.5 rounded text-xs font-semibold ${ratingBadge(selected.finalRating)}`}>
+                    Override: {selected.finalRating}
                   </span>
                 )}
                 {selected.isStale && <span className="text-xs text-orange-600">STALE</span>}
@@ -133,8 +131,6 @@ export function HeatMap({ points }: { points: HeatPoint[] }) {
               {selected.score != null && (
                 <p className="text-sm">Score: <b>{selected.score}</b>/100 · Confidence: {selected.confidence != null ? `${(selected.confidence * 100).toFixed(0)}%` : "—"}</p>
               )}
-
-              {selected.summary && <p className="text-sm">{selected.summary}</p>}
 
               {/* Photos */}
               {selected.photoUrls && selected.photoUrls.length > 0 && (
@@ -147,26 +143,16 @@ export function HeatMap({ points }: { points: HeatPoint[] }) {
                 </div>
               )}
 
-              {/* Why bullets */}
-              {selected.whyBullets && selected.whyBullets.length > 0 && (
+              {/* Findings */}
+              {selected.findings && selected.findings.length > 0 && (
                 <div>
-                  <h4 className="text-xs font-semibold mb-1">Why</h4>
-                  <ul className="list-disc pl-4 text-xs space-y-0.5">
-                    {selected.whyBullets.map((b, i) => <li key={i}>{b}</li>)}
-                  </ul>
-                </div>
-              )}
-
-              {/* Evidence */}
-              {selected.evidence && selected.evidence.length > 0 && (
-                <div>
-                  <h4 className="text-xs font-semibold mb-1">Evidence</h4>
+                  <h4 className="text-xs font-semibold mb-1">Findings</h4>
                   <div className="space-y-1">
-                    {selected.evidence.map((e, i) => (
+                    {selected.findings.map((e, i) => (
                       <div key={i} className="text-xs flex gap-1.5">
                         <span className={`px-1 py-0.5 rounded font-medium shrink-0 ${
-                          e.severity === "high" ? "bg-red-100 text-red-700" :
-                          e.severity === "medium" ? "bg-yellow-100 text-yellow-700" :
+                          e.severity === "HIGH" ? "bg-red-100 text-red-700" :
+                          e.severity === "MEDIUM" ? "bg-yellow-100 text-yellow-700" :
                           "bg-gray-100 text-gray-600"
                         }`}>
                           {e.type}
@@ -196,11 +182,11 @@ export function HeatMap({ points }: { points: HeatPoint[] }) {
               )}
 
               {/* Segment Price Indexes */}
-              {selected.segmentInputs && selected.segmentInputs.length > 0 && (
+              {selected.segmentIndices && selected.segmentIndices.length > 0 && (
                 <div>
                   <h4 className="text-xs font-semibold mb-1">Segment Indexes</h4>
                   <div className="grid grid-cols-2 gap-1 text-xs">
-                    {selected.segmentInputs.map((s, i) => (
+                    {selected.segmentIndices.map((s, i) => (
                       <div key={i} className="border rounded p-1.5">
                         <span className="opacity-70">{s.segment} #{s.slot}</span>
                         <span className="font-medium ml-1">{s.priceIndex.toFixed(2)}</span>

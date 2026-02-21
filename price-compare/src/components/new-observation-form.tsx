@@ -9,7 +9,7 @@ import { toast } from "sonner";
 type Store = {
   id: string;
   customerCode: string;
-  customerName: string;
+  name: string;
   city?: string | null;
   lat: number;
   lng: number;
@@ -18,10 +18,9 @@ type Store = {
 type ProductRef = {
   id: string;
   segment: "LUBRICANTS" | "BATTERIES" | "TIRES";
-  productName: string;
-  specs?: string | null;
-  ourPrice: number;
-  referencePhotoUrl?: string | null;
+  name: string;
+  brand?: string | null;
+  category?: string | null;
 };
 
 type Analysis = {
@@ -138,7 +137,7 @@ export function NewObservationForm({
     const q = query.trim().toLowerCase();
     if (q) {
       list = list.filter((store) =>
-        `${store.customerCode} ${store.customerName} ${store.city ?? ""}`.toLowerCase().includes(q),
+        `${store.customerCode} ${store.name} ${store.city ?? ""}`.toLowerCase().includes(q),
       );
     }
     if (sortByDistance && userLat !== null && userLng !== null) {
@@ -412,7 +411,7 @@ export function NewObservationForm({
               : "";
             return (
               <option key={store.id} value={store.id}>
-                {store.customerCode} · {store.customerName}
+                {store.customerCode} · {store.name}
                 {store.city ? ` (${store.city})` : ""}{dist}
               </option>
             );
@@ -587,9 +586,9 @@ export function NewObservationForm({
           <div className="grid gap-2 sm:grid-cols-2 text-sm">
             {[...refsBySegment.LUBRICANTS, ...refsBySegment.BATTERIES, ...refsBySegment.TIRES].slice(0, 8).map((item) => (
               <div key={item.id} className="rounded border p-2">
-                <p className="font-medium">{item.productName}</p>
-                <p className="opacity-80">{item.segment} · Our Price: {item.ourPrice.toFixed(2)}</p>
-                {item.specs && <p className="opacity-80">{item.specs}</p>}
+                <p className="font-medium">{item.name}</p>
+                <p className="opacity-80">{item.segment}{item.brand ? ` · ${item.brand}` : ""}</p>
+                {item.category && <p className="opacity-80">{item.category}</p>}
               </div>
             ))}
           </div>

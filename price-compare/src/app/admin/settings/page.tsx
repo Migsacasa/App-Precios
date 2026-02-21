@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { getSettings } from "@/lib/settings";
 import { SettingsEditor } from "@/components/admin/settings-editor";
 
 export default async function AdminSettingsPage() {
@@ -9,8 +9,7 @@ export default async function AdminSettingsPage() {
   if (!session?.user?.id) redirect("/login");
   if (session.user.role !== "ADMIN") redirect("/observations");
 
-  const rows = await prisma.appSettings.findMany({ orderBy: { key: "asc" } });
-  const settings = Object.fromEntries(rows.map((r) => [r.key, r.value]));
+  const settings = await getSettings();
 
   return (
     <div className="space-y-4 max-w-3xl">

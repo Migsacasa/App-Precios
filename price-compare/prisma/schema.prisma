@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite" // or "postgresql"
+  provider = "postgresql"
 }
 
 enum Role {
@@ -12,10 +12,11 @@ enum Role {
   ADMIN
 }
 
-enum PriceSource {
-  MANUAL
-  OCR
-  BOTH
+enum Rating {
+  GOOD
+  REGULAR
+  BAD
+  NEEDS_REVIEW
 }
 
 enum Segment {
@@ -24,348 +25,355 @@ enum Segment {
   TIRES
 }
 
-enum AiOverallRating {
-  BAD
-  REGULAR
-  GOOD
-  NEEDS_REVIEW
-  NO_IMAGE
-}
-
 enum PhotoType {
   WIDE_SHOT
   SHELF_CLOSEUP
   OTHER
 }
 
-enum SyncStatus {
-  PENDING
-  UPLOADING
-  SYNCED
-  FAILED
+enum PiiRisk {
+  NONE
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum EvidenceType {
+  VISIBILITY
+  SHELF_SHARE
+  PLACEMENT
+  AVAILABILITY
+  BRANDING
+  PRICING
+  OTHER
+}
+
+enum Severity {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum RecommendationPriority {
+  P0
+  P1
+  P2
+}
+
+enum IndexSource {
+  MANUAL
+  AUTO_CALC
+}
+
+enum AuditAction {
+  EVALUATION_CREATED
+  EVALUATION_UPDATED
+  EVALUATION_DELETED
+
+  PHOTO_UPLOADED
+  PHOTO_DELETED
+
+  AI_EVALUATED
+  AI_EVALUATION_FAILED
+
+  MANAGER_OVERRIDE_APPLIED
+  MANAGER_OVERRIDE_REMOVED
+
+  STORE_IMPORT
+  STORE_CREATED
+  STORE_UPDATED
+
+  PRODUCT_IMPORT
+  PRODUCT_CREATED
+  PRODUCT_UPDATED
+  PRODUCT_PRICE_VERSIONED
 }
 
 model User {
-  id           String   @id @default(cuid())
+  id           String   @id @default(uuid())
   email        String   @unique
   name         String?
   role         Role     @default(FIELD)
   passwordHash String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
 
-  observations  Observation[]       @relation("ObservationByUser")
-  aiInsights    AiInsight[]         @relation("AiInsightByUser")
-  evaluations   StoreEvaluation[]
-  overrides     StoreEvaluation[]   @relation("OverriddenByUser")
-  auditLogs     AuditLog[]
-  invitations   Invitation[]
-}
-
-model Competitor {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  chain     String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  stores Store[]
+  evaluations       Evaluation[]       @relation("EvaluationCreatedBy")
+  overrides         Evaluation[]       @relation("EvaluationOverriddenBy")
+  auditLogs         AuditLog[]         @relation("AuditActor")
+  storeImports      StoreImportBatch[] @relation("StoreImportBy")
+  priceVersionsMade ProductPriceVersion[] @relation("ProductPriceCreatedBy")
+
+  @@index([role])
+}
+
+model StoreImportBatch {
+  id           String   @id @default(uuid())
+  fileName     String
+  importedById String
+  importedBy   User     @relation("StoreImportBy", fields: [importedById], references: [id])
+  importedAt   DateTime @default(now())
+  rowCount     Int
+  meta         Json?
+
+  stores       Store[]
+
+  @@index([importedAt])
+  @@index([importedById])
 }
 
 model Store {
-  id String @id @default(cuid())
+  id           String   @id @default(uuid())
+  customerCode String   @unique
+  name         String
 
-  customerCode String @unique
-  customerName String
-
-  lat Float
-  lng Float
-
-  city    String?
-  address String?
-  chain   String?
-  zone    String?
-  route   String?
-  storeSegment String?
-
-  competitorId String?
-  competitor   Competitor? @relation(fields: [competitorId], references: [id])
-  name         String?
+  chain        String?
   branch       String?
+  city         String?
+  zone         String?
+  route        String?
+  segmentLabel String?
 
-  isActive Boolean @default(true)
+  lat          Decimal  @db.Decimal(9,6)
+  lng          Decimal  @db.Decimal(9,6)
+
+  active       Boolean  @default(true)
+
+  importBatchId String?
+  importBatch   StoreImportBatch? @relation(fields: [importBatchId], references: [id])
+
+  evaluations  Evaluation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  observations Observation[]
-  evaluations  StoreEvaluation[]
-
-  @@index([competitorId])
-  @@index([city])
-  @@index([zone])
+  @@index([city, zone])
+  @@index([active])
 }
 
-model StoreEvaluation {
-  id String @id @default(cuid())
+model Product {
+  id        String   @id @default(uuid())
+  sku       String   @unique
+  name      String
+  segment   Segment
+  brand     String?
+  category  String?
+  active    Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  referencePhotos ProductReferencePhoto[]
+  priceVersions   ProductPriceVersion[]
+
+  @@index([segment])
+  @@index([active])
+}
+
+model ProductReferencePhoto {
+  id        String   @id @default(uuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  url       String
+  note      String?
+
+  createdAt DateTime @default(now())
+
+  @@index([productId])
+}
+
+model ProductPriceVersion {
+  id          String   @id @default(uuid())
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  currency    String   @default("NIO")
+  ourPrice    Decimal  @db.Decimal(12,2)
+  weight      Decimal? @db.Decimal(10,4)
+
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+
+  createdById String
+  createdBy   User     @relation("ProductPriceCreatedBy", fields: [createdById], references: [id])
+
+  createdAt  DateTime @default(now())
+
+  @@index([productId, effectiveFrom])
+}
+
+model Evaluation {
+  id               String   @id @default(uuid())
 
   clientEvaluationId String? @unique
 
-  storeId String
-  store   Store @relation(fields: [storeId], references: [id])
+  storeId          String
+  store            Store    @relation(fields: [storeId], references: [id])
 
-  evaluatorUserId String
-  evaluatorUser   User @relation(fields: [evaluatorUserId], references: [id])
+  createdById      String
+  createdBy        User     @relation("EvaluationCreatedBy", fields: [createdById], references: [id])
 
-  capturedAt DateTime @default(now())
+  capturedAt       DateTime
+  submittedAt      DateTime @default(now())
 
-  // AI scoring
-  aiOverallRating AiOverallRating @default(NO_IMAGE)
-  aiScore         Int?
-  aiConfidence    Float?
-  aiSummary       String?
-  aiWhyBullets    Json?
-  aiEvidence      Json?
-  aiRecommendations Json?
-  aiJson          Json?
+  observedLat      Decimal? @db.Decimal(9,6)
+  observedLng      Decimal? @db.Decimal(9,6)
 
-  // Manager override
-  overrideRating  AiOverallRating?
-  overriddenById  String?
-  overriddenBy    User?    @relation("OverriddenByUser", fields: [overriddenById], references: [id])
-  overriddenAt    DateTime?
-  overrideReason  String?
+  aiRating         Rating?
+  aiScore          Int?
+  aiConfidence     Float?
+  finalRating      Rating?
+  needsReview      Boolean  @default(false)
 
-  // Sync
-  syncStatus SyncStatus @default(SYNCED)
+  overrideReason   String?
+  overriddenById   String?
+  overriddenBy     User?    @relation("EvaluationOverriddenBy", fields: [overriddenById], references: [id])
+  overriddenAt     DateTime?
 
-  notes String?
+  hasPhotos        Boolean  @default(false)
+  latestPhotoThumbUrl String?
 
-  gpsAtCaptureLat Float?
-  gpsAtCaptureLng Float?
+  photos           EvaluationPhoto[]
+  segmentIndices   EvaluationSegmentIndex[]
 
-  photos        EvaluationPhoto[]
-  segmentInputs EvaluationSegmentInput[]
+  aiEvaluation     AiEvaluation?
+  aiFindings       AiFinding[]
+  aiRecommendations AiRecommendation[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   @@index([storeId, capturedAt])
-  @@index([evaluatorUserId, capturedAt])
+  @@index([createdById, capturedAt])
+  @@index([finalRating, capturedAt])
+  @@index([needsReview, capturedAt])
 }
 
 model EvaluationPhoto {
-  id String @id @default(cuid())
-
+  id           String    @id @default(uuid())
   evaluationId String
-  evaluation   StoreEvaluation @relation(fields: [evaluationId], references: [id])
+  evaluation   Evaluation @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
 
-  url       String
-  mime      String?
-  width     Int?
-  height    Int?
-  photoType PhotoType @default(WIDE_SHOT)
-  sortOrder Int       @default(0)
+  photoType    PhotoType
+  url          String
+  thumbnailUrl String?
+  redactedUrl  String?
 
-  createdAt DateTime @default(now())
+  width        Int?
+  height       Int?
+  byteSize     Int?
+  sha256       String?
+
+  piiRisk      PiiRisk   @default(NONE)
+
+  capturedAt   DateTime?
+  deletedAt    DateTime?
+
+  createdAt    DateTime @default(now())
 
   @@index([evaluationId])
+  @@index([photoType])
+  @@index([deletedAt])
 }
 
-model EvaluationSegmentInput {
-  id String @id @default(cuid())
+model EvaluationSegmentIndex {
+  id            String   @id @default(uuid())
+  evaluationId  String
+  evaluation    Evaluation @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
 
-  evaluationId String
-  evaluation   StoreEvaluation @relation(fields: [evaluationId], references: [id])
+  segment       Segment
+  slot          Int
 
-  segment Segment
-  slot    Int
+  currency      String    @default("NIO")
 
-  priceIndex     Float
-  competitorPrice Float?
-  ourPrice        Float?
-  isManualOverride Boolean @default(false)
-  competitorName String?
+  competitorPrice Decimal? @db.Decimal(12,2)
+  ourPrice        Decimal? @db.Decimal(12,2)
+  priceIndex      Decimal? @db.Decimal(12,4)
 
-  createdAt DateTime @default(now())
+  source        IndexSource @default(MANUAL)
+  notes         String?
+
+  createdAt     DateTime @default(now())
 
   @@unique([evaluationId, segment, slot])
   @@index([segment])
 }
 
-model OurProduct {
-  id String @id @default(cuid())
+model AiEvaluation {
+  id           String   @id @default(uuid())
+  evaluationId String   @unique
+  evaluation   Evaluation @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
 
-  segment Segment
+  schemaVersion String
+  modelName     String
+  promptVersion String
 
-  productName String
-  specs       String?
+  outputJson    Json
 
-  ourPrice Decimal
+  latencyMs     Int?
+  tokenCount    Int?
 
-  referencePhotoUrl String?
+  errorCode     String?
+  errorMessage  String?
 
-  isActive Boolean @default(true)
+  createdAt     DateTime @default(now())
 
-  effectiveFrom DateTime @default(now())
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  priceHistory ProductPriceHistory[]
-
-  @@index([segment])
-}
-
-model ProductPriceHistory {
-  id        String   @id @default(cuid())
-  productId String
-  product   OurProduct @relation(fields: [productId], references: [id])
-
-  ourPrice      Decimal
-  effectiveFrom DateTime @default(now())
-  changedBy     String?
-
-  createdAt DateTime @default(now())
-
-  @@index([productId, effectiveFrom])
-}
-
-model AuditLog {
-  id        String   @id @default(cuid())
-  event     String
-  userId    String?
-  user      User?    @relation(fields: [userId], references: [id])
-  evaluationId String?
-  storeId      String?
-  metadata  Json?
-  createdAt DateTime @default(now())
-
-  @@index([event])
-  @@index([userId])
-  @@index([evaluationId])
   @@index([createdAt])
 }
 
-model AppSettings {
-  key       String   @id
-  value     String
-  updatedAt DateTime @updatedAt
+model AiFinding {
+  id           String   @id @default(uuid())
+  evaluationId String
+  evaluation   Evaluation @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
 
-  @@map("app_settings")
+  type         EvidenceType
+  severity     Severity
+  detail       String
+  segment      Segment?
+
+  tags         String[]
+
+  createdAt    DateTime @default(now())
+
+  @@index([evaluationId])
+  @@index([type])
+  @@index([severity])
 }
 
-model Category {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+model AiRecommendation {
+  id           String   @id @default(uuid())
+  evaluationId String
+  evaluation   Evaluation @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
 
-  products Product[]
+  priority     RecommendationPriority
+  action       String
+  rationale    String?
+  ownerRole    Role?
+  segment      Segment?
+
+  createdAt    DateTime @default(now())
+
+  @@index([evaluationId])
+  @@index([priority])
 }
 
-model Product {
-  id         String   @id @default(cuid())
-  sku        String?  @unique
-  name       String
-  categoryId String
-  category   Category @relation(fields: [categoryId], references: [id])
+model AuditLog {
+  id         String     @id @default(uuid())
+  actorId    String?
+  actor      User?      @relation("AuditActor", fields: [actorId], references: [id])
 
-  unit     String?
-  ourPrice Decimal
-  weight   Decimal @default(1.0)
-  isActive Boolean @default(true)
+  action     AuditAction
+  entityType String
+  entityId   String
+  meta       Json?
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  ip         String?
+  userAgent  String?
 
-  observations Observation[]
+  createdAt  DateTime   @default(now())
 
-  @@index([categoryId])
-}
-
-model Observation {
-  id String @id @default(cuid())
-
-  clientUuid String? @unique
-
-  storeId String
-  store   Store  @relation(fields: [storeId], references: [id])
-
-  productId String
-  product   Product @relation(fields: [productId], references: [id])
-
-  capturedById String
-  capturedBy   User @relation("ObservationByUser", fields: [capturedById], references: [id])
-
-  observedPrice Decimal
-  currency      String      @default("NIO")
-  source        PriceSource @default(MANUAL)
-
-  ocrText String?
-
-  capturedAt DateTime @default(now())
-
-  obsLat       Float?
-  obsLng       Float?
-  gpsAccuracyM Float?
-
-  notes String?
-
-  photos ObservationPhoto[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([storeId, capturedAt])
-  @@index([productId, capturedAt])
-}
-
-model ObservationPhoto {
-  id            String      @id @default(cuid())
-  observationId String
-  observation   Observation @relation(fields: [observationId], references: [id])
-
-  url    String
-  mime   String?
-  width  Int?
-  height Int?
-
-  createdAt DateTime @default(now())
-}
-
-model Invitation {
-  id        String   @id @default(cuid())
-  type      String   // "email" or "whatsapp"
-  target    String   // email address or phone number
-  message   String?
-  sentById  String
-  sentBy    User     @relation(fields: [sentById], references: [id])
-  status    String   @default("sent")
-  createdAt DateTime @default(now())
-
-  @@index([sentById])
-  @@index([target])
-}
-
-model AiInsight {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
-
-  generatedById String
-  generatedBy   User @relation("AiInsightByUser", fields: [generatedById], references: [id])
-
-  scope        String
-  storeId      String?
-  competitorId String?
-  city         String?
-  from         DateTime?
-  to           DateTime?
-
-  summary String
-  json    Json
-
-  @@index([scope])
-  @@index([storeId])
-  @@index([competitorId])
+  @@index([entityType, entityId])
+  @@index([action, createdAt])
 }

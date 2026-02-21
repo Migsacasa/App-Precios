@@ -15,21 +15,21 @@ async function createProduct(formData: FormData) {
   }
 
   const segment = String(formData.get("segment") ?? "");
-  const productName = String(formData.get("productName") ?? "").trim();
-  const specs = String(formData.get("specs") ?? "").trim();
-  const ourPrice = Number(formData.get("ourPrice") ?? 0);
-  const referencePhotoUrl = String(formData.get("referencePhotoUrl") ?? "").trim();
+  const name = String(formData.get("name") ?? "").trim();
+  const sku = String(formData.get("sku") ?? "").trim();
+  const brand = String(formData.get("brand") ?? "").trim();
+  const category = String(formData.get("category") ?? "").trim();
 
   if (!["LUBRICANTS", "BATTERIES", "TIRES"].includes(segment)) return;
-  if (!productName || !Number.isFinite(ourPrice) || ourPrice <= 0) return;
+  if (!name) return;
 
-  await prisma.ourProduct.create({
+  await prisma.product.create({
     data: {
       segment: segment as "LUBRICANTS" | "BATTERIES" | "TIRES",
-      productName,
-      specs: specs || null,
-      ourPrice,
-      referencePhotoUrl: referencePhotoUrl || null,
+      name,
+      sku: sku || `AUTO-${name.replace(/\s+/g, "-").toUpperCase()}`,
+      brand: brand || null,
+      category: category || null,
     },
   });
 
@@ -41,14 +41,14 @@ export default async function AdminProductsPage() {
   if (!session?.user?.id) redirect("/login");
   if (session.user.role !== "ADMIN") redirect("/observations");
 
-  const products = await prisma.ourProduct.findMany({
-    orderBy: [{ segment: "asc" }, { productName: "asc" }],
+  const products = await prisma.product.findMany({
+    orderBy: [{ segment: "asc" }, { name: "asc" }],
   });
 
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-semibold">Admin Products</h1>
-      <p className="text-sm opacity-80">Manage segment specs, our prices, and reference photos.</p>
+      <p className="text-sm opacity-80">Manage segment specs, pricing, and reference photos.</p>
 
       <form action={createProduct} className="border rounded p-4 grid md:grid-cols-5 gap-2 items-end">
         <div>
@@ -61,20 +61,20 @@ export default async function AdminProductsPage() {
         </div>
         <div>
           <label className="text-xs">Product Name</label>
-          <input name="productName" className="w-full border rounded px-2 py-2" required />
+          <input name="name" className="w-full border rounded px-2 py-2" required />
         </div>
         <div>
-          <label className="text-xs">Specs</label>
-          <input name="specs" className="w-full border rounded px-2 py-2" />
+          <label className="text-xs">SKU</label>
+          <input name="sku" className="w-full border rounded px-2 py-2" />
         </div>
         <div>
-          <label className="text-xs">Our Price</label>
-          <input name="ourPrice" type="number" step="0.01" min="0" className="w-full border rounded px-2 py-2" required />
+          <label className="text-xs">Brand</label>
+          <input name="brand" className="w-full border rounded px-2 py-2" />
         </div>
         <button className="border rounded px-3 py-2">Add Product</button>
         <div className="md:col-span-5">
-          <label className="text-xs">Reference Photo URL (optional)</label>
-          <input name="referencePhotoUrl" className="w-full border rounded px-2 py-2" />
+          <label className="text-xs">Category (optional)</label>
+          <input name="category" className="w-full border rounded px-2 py-2" />
         </div>
       </form>
 
@@ -84,11 +84,11 @@ export default async function AdminProductsPage() {
         initialRows={products.map((product) => ({
           id: product.id,
           segment: product.segment,
-          productName: product.productName,
-          specs: product.specs ?? "",
-          ourPrice: Number(product.ourPrice),
-          referencePhotoUrl: product.referencePhotoUrl ?? "",
-          isActive: product.isActive,
+          name: product.name,
+          sku: product.sku,
+          brand: product.brand ?? "",
+          category: product.category ?? "",
+          active: product.active,
         }))}
       />
     </div>

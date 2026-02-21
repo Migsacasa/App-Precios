@@ -9,12 +9,12 @@ export async function GET(req: NextRequest) {
     const url = new URL(req.url);
     const page = Math.max(1, parseInt(url.searchParams.get("page") ?? "1", 10));
     const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get("limit") ?? "50", 10)));
-    const event = url.searchParams.get("event") ?? undefined;
-    const userId = url.searchParams.get("userId") ?? undefined;
+    const action = url.searchParams.get("action") ?? undefined;
+    const actorId = url.searchParams.get("actorId") ?? undefined;
 
     const where: Record<string, unknown> = {};
-    if (event) where.event = event;
-    if (userId) where.userId = userId;
+    if (action) where.action = action;
+    if (actorId) where.actorId = actorId;
 
     const [rows, total] = await Promise.all([
       prisma.auditLog.findMany({
@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
         skip: (page - 1) * limit,
         take: limit,
         include: {
-          user: { select: { id: true, name: true, role: true } },
+          actor: { select: { id: true, name: true, role: true } },
         },
       }),
       prisma.auditLog.count({ where }),

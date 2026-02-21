@@ -19,19 +19,19 @@ export async function POST(
     return NextResponse.json({ error: parsed.error.message }, { status: 400 });
   }
 
-  const evaluation = await prisma.storeEvaluation.findUnique({
+  const evaluation = await prisma.evaluation.findUnique({
     where: { id },
-    select: { id: true, aiOverallRating: true, storeId: true },
+    select: { id: true, aiRating: true, storeId: true },
   });
 
   if (!evaluation) {
     return NextResponse.json({ error: "Evaluation not found" }, { status: 404 });
   }
 
-  const updated = await prisma.storeEvaluation.update({
+  const updated = await prisma.evaluation.update({
     where: { id },
     data: {
-      overrideRating: parsed.data.rating,
+      finalRating: parsed.data.rating,
       overriddenById: session.user!.id,
       overriddenAt: new Date(),
       overrideReason: parsed.data.reason,
@@ -39,12 +39,13 @@ export async function POST(
   });
 
   await logAudit({
-    event: "evaluation.override",
-    userId: session.user!.id,
-    evaluationId: id,
-    storeId: evaluation.storeId,
-    metadata: {
-      previousAiRating: evaluation.aiOverallRating,
+    action: "MANAGER_OVERRIDE_APPLIED",
+    actorId: session.user!.id,
+    entityType: "Evaluation",
+    entityId: id,
+    meta: {
+      storeId: evaluation.storeId,
+      previousAiRating: evaluation.aiRating,
       newOverrideRating: parsed.data.rating,
       reason: parsed.data.reason,
     },

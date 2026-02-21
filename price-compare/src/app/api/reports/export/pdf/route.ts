@@ -16,7 +16,7 @@ export async function GET(req: Request) {
       ? new Date(url.searchParams.get("to") as string)
       : undefined;
 
-    const rows = await prisma.storeEvaluation.findMany({
+    const rows = await prisma.evaluation.findMany({
       where: {
         ...(from || to
           ? {
@@ -29,8 +29,11 @@ export async function GET(req: Request) {
       },
       include: {
         store: true,
-        segmentInputs: { orderBy: [{ segment: "asc" }, { slot: "asc" }] },
-        evaluatorUser: { select: { name: true } },
+        segmentIndices: { orderBy: [{ segment: "asc" }, { slot: "asc" }] },
+        createdBy: { select: { name: true } },
+        aiFindings: true,
+        aiRecommendations: true,
+        aiEvaluation: true,
       },
       orderBy: { capturedAt: "desc" },
       take: 120,
@@ -55,44 +58,35 @@ export async function GET(req: Request) {
     pdf.moveDown(1);
 
     for (const row of rows) {
-      const effectiveRating = row.overrideRating ?? row.aiOverallRating;
-      const whyBullets = row.aiWhyBullets as string[] | null;
-      const evidence = row.aiEvidence as Array<{ type: string; detail: string; severity: string }> | null;
-      const recs = row.aiRecommendations as Array<{ priority: string; action: string; rationale?: string }> | null;
+      const effectiveRating = row.finalRating ?? row.aiRating;
+      const aiOutput = row.aiEvaluation?.outputJson as Record<string, unknown> | null;
+      const summary = (aiOutput?.summary as string) ?? "-";
 
       // Header line
       pdf.fontSize(10).font("Helvetica-Bold")
-        .text(`${row.capturedAt.toISOString().slice(0, 10)} | ${row.store.customerCode} | ${row.store.customerName} | ${effectiveRating}${row.aiScore != null ? ` (Score: ${row.aiScore}/100)` : ""}`);
+        .text(`${row.capturedAt.toISOString().slice(0, 10)} | ${row.store.customerCode} | ${row.store.name} | ${effectiveRating ?? "PENDING"}${row.aiScore != null ? ` (Score: ${row.aiScore}/100)` : ""}`);
       pdf.font("Helvetica");
 
       // Override notice
-      if (row.overrideRating) {
-        pdf.fontSize(8).text(`  Override: AI=${row.aiOverallRating} → Manager=${row.overrideRating} | Reason: ${row.overrideReason ?? "-"}`);
+      if (row.finalRating && row.finalRating !== row.aiRating) {
+        pdf.fontSize(8).text(`  Override: AI=${row.aiRating} → Manager=${row.finalRating} | Reason: ${row.overrideReason ?? "-"}`);
       }
 
       // Summary
-      pdf.fontSize(9).text(`  Summary: ${row.aiSummary ?? "-"}`);
+      pdf.fontSize(9).text(`  Summary: ${summary}`);
 
-      // Why bullets
-      if (whyBullets && whyBullets.length > 0) {
-        pdf.fontSize(8).text(`  Key findings:`);
-        for (const bullet of whyBullets) {
-          pdf.text(`    • ${bullet}`);
-        }
-      }
-
-      // Evidence
-      if (evidence && evidence.length > 0) {
-        pdf.fontSize(8).text(`  Evidence:`);
-        for (const e of evidence.slice(0, 5)) {
-          pdf.text(`    [${e.type}] ${e.detail} (${e.severity})`);
+      // Findings
+      if (row.aiFindings.length > 0) {
+        pdf.fontSize(8).text(`  Findings:`);
+        for (const f of row.aiFindings.slice(0, 8)) {
+          pdf.text(`    [${f.type}] ${f.detail} (${f.severity})`);
         }
       }
 
       // Recommendations
-      if (recs && recs.length > 0) {
+      if (row.aiRecommendations.length > 0) {
         pdf.fontSize(8).text(`  Recommendations:`);
-        for (const r of recs) {
+        for (const r of row.aiRecommendations) {
           pdf.text(`    [${r.priority}] ${r.action}${r.rationale ? ` — ${r.rationale}` : ""}`);
         }
       }
@@ -100,12 +94,12 @@ export async function GET(req: Request) {
       // Segment slots
       pdf.fontSize(8)
         .text(
-          `  Slots: ${row.segmentInputs.map((slot) => `${slot.segment}#${slot.slot}:${Number(slot.priceIndex).toFixed(1)}`).join(" | ")}`,
+          `  Slots: ${row.segmentIndices.map((slot) => `${slot.segment}#${slot.slot}:${Number(slot.priceIndex ?? 0).toFixed(1)}`).join(" | ")}`,
         );
 
       // Evaluator
-      if (row.evaluatorUser?.name) {
-        pdf.fontSize(8).text(`  Evaluator: ${row.evaluatorUser.name}`);
+      if (row.createdBy?.name) {
+        pdf.fontSize(8).text(`  Evaluator: ${row.createdBy.name}`);
       }
 
       pdf.moveDown(0.5);

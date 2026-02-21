@@ -1,32 +1,27 @@
 import { prisma } from "@/lib/prisma";
-import type { Prisma } from "@prisma/client";
+import type { AuditAction, Prisma } from "@prisma/client";
 
-export type AuditEvent =
-  | "evaluation.created"
-  | "evaluation.updated"
-  | "evaluation.synced"
-  | "evaluation.override"
-  | "csv.import.stores"
-  | "csv.import.products"
-  | "settings.updated"
-  | "retention.cleanup"
-  | "user.login";
+export type { AuditAction };
 
 export async function logAudit(params: {
-  event: AuditEvent;
-  userId?: string;
-  evaluationId?: string;
-  storeId?: string;
-  metadata?: Record<string, unknown>;
+  action: AuditAction;
+  actorId?: string;
+  entityType: string;
+  entityId: string;
+  meta?: Record<string, unknown>;
+  ip?: string;
+  userAgent?: string;
 }): Promise<void> {
   try {
     await prisma.auditLog.create({
       data: {
-        event: params.event,
-        userId: params.userId ?? null,
-        evaluationId: params.evaluationId ?? null,
-        storeId: params.storeId ?? null,
-        metadata: (params.metadata ?? null) as Prisma.InputJsonValue,
+        action: params.action,
+        actorId: params.actorId ?? null,
+        entityType: params.entityType,
+        entityId: params.entityId,
+        meta: (params.meta ?? null) as Prisma.InputJsonValue,
+        ip: params.ip ?? null,
+        userAgent: params.userAgent ?? null,
       },
     });
   } catch (e) {

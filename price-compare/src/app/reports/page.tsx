@@ -35,17 +35,17 @@ export default async function ReportsPage({
   };
 
   const [evaluations, totalCount] = await Promise.all([
-    prisma.storeEvaluation.findMany({
+    prisma.evaluation.findMany({
       where,
       include: {
         store: true,
-        segmentInputs: { orderBy: [{ segment: "asc" }, { slot: "asc" }] },
+        segmentIndices: { orderBy: [{ segment: "asc" }, { slot: "asc" }] },
       },
       orderBy: { capturedAt: "desc" },
       skip: (currentPage - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
     }),
-    prisma.storeEvaluation.count({ where }),
+    prisma.evaluation.count({ where }),
   ]);
 
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
@@ -83,10 +83,10 @@ export default async function ReportsPage({
               <tr key={evaluation.id} className="border-t align-top">
                 <td className="p-2">{evaluation.capturedAt.toISOString().slice(0, 10)}</td>
                 <td className="p-2">{evaluation.store.customerCode}</td>
-                <td className="p-2">{evaluation.store.customerName}</td>
-                <td className="p-2">{evaluation.aiOverallRating}</td>
+                <td className="p-2">{evaluation.store.name}</td>
+                <td className="p-2">{evaluation.aiRating ?? "PENDING"}</td>
                 <td className="p-2">
-                  {evaluation.segmentInputs.map((slot) => `${slot.segment}#${slot.slot}: ${Number(slot.priceIndex).toFixed(1)}`).join(" · ")}
+                  {evaluation.segmentIndices.map((slot) => `${slot.segment}#${slot.slot}: ${Number(slot.priceIndex ?? 0).toFixed(1)}`).join(" · ")}
                 </td>
               </tr>
             ))}

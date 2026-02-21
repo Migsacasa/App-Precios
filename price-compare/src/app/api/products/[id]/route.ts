@@ -5,11 +5,10 @@ import { requireAdmin, SecurityError } from "@/lib/security";
 
 const schema = z.object({
   segment: z.enum(["LUBRICANTS", "BATTERIES", "TIRES"]).optional(),
-  productName: z.string().min(2).optional(),
-  specs: z.string().optional(),
-  ourPrice: z.coerce.number().positive().optional(),
-  referencePhotoUrl: z.string().optional(),
-  isActive: z.coerce.boolean().optional(),
+  name: z.string().min(2).optional(),
+  brand: z.string().optional(),
+  category: z.string().optional(),
+  active: z.coerce.boolean().optional(),
 });
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -20,34 +19,27 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const body = await req.json();
     const parsed = schema.parse(body);
 
-    const product = await prisma.ourProduct.update({
+    const product = await prisma.product.update({
       where: { id },
       data: {
         ...(parsed.segment != null ? { segment: parsed.segment } : {}),
-        ...(parsed.productName != null ? { productName: parsed.productName } : {}),
-        ...(parsed.specs != null ? { specs: parsed.specs || null } : {}),
-        ...(parsed.ourPrice != null ? { ourPrice: parsed.ourPrice } : {}),
-        ...(parsed.referencePhotoUrl != null ? { referencePhotoUrl: parsed.referencePhotoUrl || null } : {}),
-        ...(parsed.isActive != null ? { isActive: parsed.isActive } : {}),
+        ...(parsed.name != null ? { name: parsed.name } : {}),
+        ...(parsed.brand != null ? { brand: parsed.brand || null } : {}),
+        ...(parsed.category != null ? { category: parsed.category || null } : {}),
+        ...(parsed.active != null ? { active: parsed.active } : {}),
       },
       select: {
         id: true,
+        sku: true,
         segment: true,
-        productName: true,
-        specs: true,
-        ourPrice: true,
-        referencePhotoUrl: true,
-        isActive: true,
+        name: true,
+        brand: true,
+        category: true,
+        active: true,
       },
     });
 
-    return NextResponse.json({
-      ok: true,
-      product: {
-        ...product,
-        ourPrice: Number(product.ourPrice),
-      },
-    });
+    return NextResponse.json({ ok: true, product });
   } catch (error) {
     if (error instanceof SecurityError) {
       return NextResponse.json({ error: error.message }, { status: error.status });

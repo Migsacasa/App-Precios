@@ -18,7 +18,7 @@ export async function POST(req: Request) {
     const body = (await req.json()) as InsightRequest;
     const { storeId, city, from, to } = body;
 
-    const evaluations = await prisma.storeEvaluation.findMany({
+    const evaluations = await prisma.evaluation.findMany({
       where: {
         ...(storeId ? { storeId } : {}),
         ...(city ? { store: { city } } : {}),
@@ -31,20 +31,23 @@ export async function POST(req: Request) {
             }
           : {}),
       },
+      include: {
+        aiEvaluation: true,
+        aiFindings: true,
+        aiRecommendations: true,
+      },
       orderBy: { capturedAt: "desc" },
       take: 200,
     });
 
     const summary = evaluations.map((evaluation) => {
-      const json = evaluation.aiJson as
-        | { findings?: string[]; recommendations?: Array<{ action?: string; rationale?: string }> }
-        | null
-        | undefined;
       return {
-        rating: evaluation.aiOverallRating,
-        summary: evaluation.aiSummary,
-        findings: json?.findings ?? [],
-        recommendations: json?.recommendations ?? [],
+        rating: evaluation.aiRating ?? evaluation.finalRating,
+        findings: evaluation.aiFindings.map((f) => f.detail),
+        recommendations: evaluation.aiRecommendations.map((r) => ({
+          action: r.action,
+          rationale: r.rationale,
+        })),
       };
     });
 
@@ -60,7 +63,7 @@ export async function POST(req: Request) {
           GOOD: summary.filter((item) => item.rating === "GOOD").length,
           REGULAR: summary.filter((item) => item.rating === "REGULAR").length,
           BAD: summary.filter((item) => item.rating === "BAD").length,
-          NO_IMAGE: summary.filter((item) => item.rating === "NO_IMAGE").length,
+          NEEDS_REVIEW: summary.filter((item) => item.rating === "NEEDS_REVIEW").length,
         },
         findings,
         recommendations,

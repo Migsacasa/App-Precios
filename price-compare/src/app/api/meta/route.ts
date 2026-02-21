@@ -14,20 +14,20 @@ export async function GET() {
   try {
     const [stores, products] = await Promise.all([
       prisma.store.findMany({
-        where: { isActive: true },
-        orderBy: [{ city: "asc" }, { customerName: "asc" }],
+        where: { active: true },
+        orderBy: [{ city: "asc" }, { name: "asc" }],
         select: {
           id: true,
           customerCode: true,
-          customerName: true,
+          name: true,
           city: true,
           lat: true,
           lng: true,
         },
       }),
-      prisma.ourProduct.findMany({
-        where: { isActive: true },
-        orderBy: [{ segment: "asc" }, { productName: "asc" }],
+      prisma.product.findMany({
+        where: { active: true },
+        orderBy: [{ segment: "asc" }, { name: "asc" }],
       }),
     ]);
 

@@ -5,10 +5,10 @@ import { logAudit } from "@/lib/audit";
 import { z } from "zod";
 
 const VALID_SEGMENTS = ["LUBRICANTS", "BATTERIES", "TIRES"] as const;
-type Segment = (typeof VALID_SEGMENTS)[number];
 
 const rowSchema = z.object({
   name: z.string().min(1),
+  sku: z.string().min(1).optional(),
   segment: z.enum(VALID_SEGMENTS).optional(),
   ourPrice: z.coerce.number().positive().optional(),
 });
@@ -36,6 +36,7 @@ export async function POST(req: NextRequest) {
     // Parse header
     const header = lines[0].split(",").map((h) => h.trim().toLowerCase());
     const nameIdx = header.indexOf("name");
+    const skuIdx = header.indexOf("sku");
     const segmentIdx = header.indexOf("segment");
     const priceIdx = header.findIndex((h) => h === "ourprice" || h === "our_price" || h === "price");
 
@@ -49,6 +50,7 @@ export async function POST(req: NextRequest) {
       const cols = lines[i].split(",").map((c) => c.trim());
       const raw = {
         name: cols[nameIdx] ?? "",
+        sku: skuIdx >= 0 ? cols[skuIdx] : undefined,
         segment: segmentIdx >= 0 ? cols[segmentIdx]?.toUpperCase() : undefined,
         ourPrice: priceIdx >= 0 ? cols[priceIdx] : undefined,
       };
@@ -59,52 +61,52 @@ export async function POST(req: NextRequest) {
         continue;
       }
 
-      const { name, segment, ourPrice } = parsed.data;
+      const { name, sku, segment, ourPrice } = parsed.data;
+      const productSku = sku ?? `AUTO-${name.replace(/\s+/g, "-").toUpperCase()}`;
 
-      // Upsert product by productName
-      const existing = await prisma.ourProduct.findFirst({
-        where: { productName: name },
+      // Upsert product by sku
+      const existing = await prisma.product.findUnique({
+        where: { sku: productSku },
       });
 
       if (existing) {
-        const oldPrice = Number(existing.ourPrice);
-        await prisma.ourProduct.update({
+        await prisma.product.update({
           where: { id: existing.id },
           data: {
+            name,
             ...(segment ? { segment } : {}),
-            ourPrice: ourPrice ?? existing.ourPrice,
-            effectiveFrom: ourPrice && ourPrice !== oldPrice ? new Date() : existing.effectiveFrom,
           },
         });
 
-        // Record price history if price changed
-        if (ourPrice && ourPrice !== oldPrice) {
-          await prisma.productPriceHistory.create({
+        // Record price version if price provided
+        if (ourPrice) {
+          await prisma.productPriceVersion.create({
             data: {
               productId: existing.id,
               ourPrice: ourPrice,
               effectiveFrom: new Date(),
+              createdById: session.user!.id,
             },
           });
         }
 
         results.updated++;
       } else {
-        const product = await prisma.ourProduct.create({
+        const product = await prisma.product.create({
           data: {
-            productName: name,
+            sku: productSku,
+            name,
             segment: segment ?? "LUBRICANTS",
-            ourPrice: ourPrice ?? 0,
-            effectiveFrom: new Date(),
           },
         });
 
         if (ourPrice) {
-          await prisma.productPriceHistory.create({
+          await prisma.productPriceVersion.create({
             data: {
               productId: product.id,
               ourPrice: ourPrice,
               effectiveFrom: new Date(),
+              createdById: session.user!.id,
             },
           });
         }
@@ -114,9 +116,11 @@ export async function POST(req: NextRequest) {
     }
 
     await logAudit({
-      event: "csv.import.products",
-      userId: session.user!.id,
-      metadata: {
+      action: "PRODUCT_IMPORT",
+      actorId: session.user!.id,
+      entityType: "Product",
+      entityId: "batch",
+      meta: {
         fileName: file.name,
         created: results.created,
         updated: results.updated,

@@ -20,9 +20,9 @@ export async function GET(req: NextRequest) {
     const to = url.searchParams.get("to")
       ? new Date(url.searchParams.get("to") as string)
       : undefined;
-    const type = url.searchParams.get("type") ?? "history"; // "history" (all rows) or "snapshot" (latest per store)
+    const type = url.searchParams.get("type") ?? "history";
 
-    const evaluations = await prisma.storeEvaluation.findMany({
+    const evaluations = await prisma.evaluation.findMany({
       where: {
         ...(from || to
           ? {
@@ -36,8 +36,11 @@ export async function GET(req: NextRequest) {
       },
       include: {
         store: true,
-        segmentInputs: { orderBy: [{ segment: "asc" }, { slot: "asc" }] },
-        evaluatorUser: { select: { name: true } },
+        segmentIndices: { orderBy: [{ segment: "asc" }, { slot: "asc" }] },
+        createdBy: { select: { name: true } },
+        aiFindings: true,
+        aiRecommendations: true,
+        aiEvaluation: true,
       },
       orderBy: { capturedAt: "desc" },
       take: 10000,
@@ -57,46 +60,42 @@ export async function GET(req: NextRequest) {
     const header = [
       "captured_at",
       "customer_code",
-      "customer_name",
+      "store_name",
       "city",
       "zone",
       "ai_rating",
-      "override_rating",
+      "final_rating",
       "effective_rating",
       "ai_score",
       "ai_confidence",
-      "ai_summary",
       "evaluator",
       "segment_slots",
-      "why_bullets",
+      "findings",
       "recommendations",
     ];
 
     const lines = [
       header.join(","),
       ...rows.map((evaluation) => {
-        const whyBullets = evaluation.aiWhyBullets as string[] | null;
-        const recs = evaluation.aiRecommendations as Array<{ action: string }> | null;
         return [
           csvEscape(evaluation.capturedAt.toISOString()),
           csvEscape(evaluation.store.customerCode),
-          csvEscape(evaluation.store.customerName),
+          csvEscape(evaluation.store.name),
           csvEscape(evaluation.store.city ?? ""),
           csvEscape(evaluation.store.zone ?? ""),
-          csvEscape(evaluation.aiOverallRating),
-          csvEscape(evaluation.overrideRating ?? ""),
-          csvEscape(evaluation.overrideRating ?? evaluation.aiOverallRating),
+          csvEscape(evaluation.aiRating ?? ""),
+          csvEscape(evaluation.finalRating ?? ""),
+          csvEscape(evaluation.finalRating ?? evaluation.aiRating ?? ""),
           csvEscape(evaluation.aiScore ?? ""),
           csvEscape(evaluation.aiConfidence != null ? (evaluation.aiConfidence * 100).toFixed(0) + "%" : ""),
-          csvEscape(evaluation.aiSummary ?? ""),
-          csvEscape(evaluation.evaluatorUser?.name ?? ""),
+          csvEscape(evaluation.createdBy?.name ?? ""),
           csvEscape(
-            evaluation.segmentInputs
-              .map((slot) => `${slot.segment}#${slot.slot}:${Number(slot.priceIndex).toFixed(2)}`)
+            evaluation.segmentIndices
+              .map((slot) => `${slot.segment}#${slot.slot}:${Number(slot.priceIndex ?? 0).toFixed(2)}`)
               .join(" | "),
           ),
-          csvEscape(whyBullets?.join(" | ") ?? ""),
-          csvEscape(recs?.map((r) => r.action).join(" | ") ?? ""),
+          csvEscape(evaluation.aiFindings.map((f) => `[${f.type}] ${f.detail}`).join(" | ")),
+          csvEscape(evaluation.aiRecommendations.map((r) => `[${r.priority}] ${r.action}`).join(" | ")),
         ].join(",");
       }),
     ];

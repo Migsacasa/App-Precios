@@ -4,7 +4,7 @@ import { requireAdmin, SecurityError } from "@/lib/security";
 
 type CsvRow = {
   customerCode: string;
-  customerName: string;
+  name: string;
   lat: number;
   lng: number;
 };
@@ -49,13 +49,13 @@ function parseCsv(text: string): CsvRow[] {
   const headers = parseCsvLine(lines[0]).map((h) => h.trim());
   const index = {
     customerCode: headers.indexOf("customerCode"),
-    customerName: headers.indexOf("customerName"),
+    name: Math.max(headers.indexOf("name"), headers.indexOf("customerName")),
     lat: headers.indexOf("lat"),
     lng: headers.indexOf("lng"),
   };
 
-  if (Object.values(index).some((value) => value < 0)) {
-    throw new Error("CSV must include headers: customerCode, customerName, lat, lng");
+  if (index.customerCode < 0 || index.name < 0 || index.lat < 0 || index.lng < 0) {
+    throw new Error("CSV must include headers: customerCode, name (or customerName), lat, lng");
   }
 
   const rows: CsvRow[] = [];
@@ -63,12 +63,12 @@ function parseCsv(text: string): CsvRow[] {
   for (let i = 1; i < lines.length; i++) {
     const cols = parseCsvLine(lines[i]);
     const customerCode = cols[index.customerCode]?.trim();
-    const customerName = cols[index.customerName]?.trim();
+    const name = cols[index.name]?.trim();
     const lat = Number(cols[index.lat]);
     const lng = Number(cols[index.lng]);
 
-    if (!customerCode || !customerName) {
-      throw new Error(`Row ${i + 1}: customerCode and customerName are required`);
+    if (!customerCode || !name) {
+      throw new Error(`Row ${i + 1}: customerCode and name are required`);
     }
     if (!Number.isFinite(lat) || lat < -90 || lat > 90) {
       throw new Error(`Row ${i + 1}: lat must be between -90 and 90`);
@@ -77,7 +77,7 @@ function parseCsv(text: string): CsvRow[] {
       throw new Error(`Row ${i + 1}: lng must be between -180 and 180`);
     }
 
-    rows.push({ customerCode, customerName, lat, lng });
+    rows.push({ customerCode, name, lat, lng });
   }
 
   return rows;
@@ -106,10 +106,10 @@ export async function POST(req: Request) {
         await prisma.store.update({
           where: { customerCode: row.customerCode },
           data: {
-            customerName: row.customerName,
+            name: row.name,
             lat: row.lat,
             lng: row.lng,
-            isActive: true,
+            active: true,
           },
         });
         updated++;
@@ -117,7 +117,7 @@ export async function POST(req: Request) {
         await prisma.store.create({
           data: {
             customerCode: row.customerCode,
-            customerName: row.customerName,
+            name: row.name,
             lat: row.lat,
             lng: row.lng,
           },
@@ -142,7 +142,7 @@ export async function GET() {
     await requireAdmin();
 
     const sample = [
-      "customerCode,customerName,lat,lng",
+      "customerCode,name,lat,lng",
       "CUST-001,Tienda Central Norte,12.1364,-86.2514",
       "CUST-002,Repuestos El Mercado,12.1122,-86.2260",
     ].join("\n");

@@ -37,7 +37,7 @@ export function StoreCsvImport() {
   return (
     <div className="border rounded p-4 space-y-3">
       <h3 className="font-semibold">CSV Import</h3>
-      <p className="text-sm opacity-80">Required columns: customerCode, customerName, lat, lng</p>
+      <p className="text-sm opacity-80">Required columns: customerCode, name, lat, lng</p>
       <div className="flex flex-wrap gap-2 items-center">
         <input type="file" accept=".csv,text/csv" onChange={(event) => setFile(event.target.files?.[0] ?? null)} />
         <button className="border rounded px-3 py-2" type="button" onClick={onImport} disabled={uploading}>

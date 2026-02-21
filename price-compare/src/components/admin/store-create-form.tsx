@@ -5,9 +5,10 @@ import { toast } from "sonner";
 
 export function StoreCreateForm() {
   const [customerCode, setCustomerCode] = useState("");
-  const [customerName, setCustomerName] = useState("");
+  const [name, setName] = useState("");
   const [city, setCity] = useState("");
-  const [address, setAddress] = useState("");
+  const [zone, setZone] = useState("");
+  const [route, setRoute] = useState("");
   const [lat, setLat] = useState("");
   const [lng, setLng] = useState("");
   const [saving, setSaving] = useState(false);
@@ -20,9 +21,10 @@ export function StoreCreateForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           customerCode,
-          customerName,
+          name,
           city,
-          address,
+          zone,
+          route,
           lat: Number(lat),
           lng: Number(lng),
         }),
@@ -47,9 +49,10 @@ export function StoreCreateForm() {
       <h3 className="font-semibold">Add store manually</h3>
       <div className="grid md:grid-cols-3 gap-2">
         <input className="border rounded px-2 py-2" placeholder="Customer Code" value={customerCode} onChange={(e) => setCustomerCode(e.target.value)} />
-        <input className="border rounded px-2 py-2" placeholder="Customer Name" value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
+        <input className="border rounded px-2 py-2" placeholder="Store Name" value={name} onChange={(e) => setName(e.target.value)} />
         <input className="border rounded px-2 py-2" placeholder="City" value={city} onChange={(e) => setCity(e.target.value)} />
-        <input className="border rounded px-2 py-2 md:col-span-2" placeholder="Address" value={address} onChange={(e) => setAddress(e.target.value)} />
+        <input className="border rounded px-2 py-2" placeholder="Zone" value={zone} onChange={(e) => setZone(e.target.value)} />
+        <input className="border rounded px-2 py-2" placeholder="Route" value={route} onChange={(e) => setRoute(e.target.value)} />
         <input className="border rounded px-2 py-2" placeholder="Latitude" value={lat} onChange={(e) => setLat(e.target.value)} />
         <input className="border rounded px-2 py-2" placeholder="Longitude" value={lng} onChange={(e) => setLng(e.target.value)} />
       </div>

@@ -5,16 +5,16 @@ import { requireManager, SecurityError } from "@/lib/security";
 type HeatPoint = {
   storeId: string;
   customerCode: string;
-  customerName: string;
+  name: string;
   lat: number;
   lng: number;
   city: string | null;
-  rating: "GOOD" | "REGULAR" | "BAD" | "NEEDS_REVIEW" | "NO_IMAGE";
+  rating: "GOOD" | "REGULAR" | "BAD" | "NEEDS_REVIEW";
   color: "green" | "yellow" | "red" | "orange" | "black";
   lastEvaluationAt: string | null;
 };
 
-function ratingColor(rating: "GOOD" | "REGULAR" | "BAD" | "NEEDS_REVIEW" | "NO_IMAGE") {
+function ratingColor(rating: "GOOD" | "REGULAR" | "BAD" | "NEEDS_REVIEW" | null) {
   if (rating === "GOOD") return "green" as const;
   if (rating === "REGULAR") return "yellow" as const;
   if (rating === "BAD") return "red" as const;
@@ -32,7 +32,7 @@ export async function GET(req: Request) {
       where: {
         ...(city ? { city } : {}),
       },
-      orderBy: [{ city: "asc" }, { customerName: "asc" }],
+      orderBy: [{ city: "asc" }, { name: "asc" }],
       include: {
         evaluations: {
           orderBy: { capturedAt: "desc" },
@@ -44,21 +44,16 @@ export async function GET(req: Request) {
 
     const points: HeatPoint[] = stores.map((store) => {
       const latest = store.evaluations[0];
-      const hasPhoto = Boolean(latest?.photos[0]?.url);
-      const rating: HeatPoint["rating"] = latest
-        ? hasPhoto
-          ? latest.aiOverallRating
-          : "NO_IMAGE"
-        : "NO_IMAGE";
+      const rating = latest?.finalRating ?? latest?.aiRating ?? null;
 
       return {
         storeId: store.id,
         customerCode: store.customerCode,
-        customerName: store.customerName,
-        lat: store.lat,
-        lng: store.lng,
+        name: store.name,
+        lat: Number(store.lat),
+        lng: Number(store.lng),
         city: store.city,
-        rating,
+        rating: rating ?? "NEEDS_REVIEW",
         color: ratingColor(rating),
         lastEvaluationAt: latest?.capturedAt?.toISOString() ?? null,
       };

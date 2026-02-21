@@ -26,14 +26,14 @@ export default async function StoresPage() {
           take: 1,
         },
       },
-      orderBy: [{ city: "asc" }, { customerName: "asc" }],
+      orderBy: [{ city: "asc" }, { name: "asc" }],
     });
 
     data = stores.map((s) => ({
       id: s.id,
       competitor: s.customerCode,
-      chain: s.evaluations[0]?.aiOverallRating ?? "NO_IMAGE",
-      name: s.customerName,
+      chain: s.evaluations[0]?.aiRating ?? "PENDING",
+      name: s.name,
       city: s.city ?? "-",
       coords: s.lat && s.lng ? `${s.lat}, ${s.lng}` : "-",
     }));

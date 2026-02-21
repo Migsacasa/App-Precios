@@ -17,9 +17,9 @@ export default async function AdminAuditLogsPage({
 
   const params = await searchParams;
   const currentPage = Math.max(1, parseInt(params?.page ?? "1", 10) || 1);
-  const eventFilter = params?.event ?? undefined;
+  const actionFilter = params?.event ?? undefined;
 
-  const where = eventFilter ? { event: eventFilter } : {};
+  const where = actionFilter ? { action: actionFilter as any } : {};
 
   const [logs, totalCount] = await Promise.all([
     prisma.auditLog.findMany({
@@ -28,7 +28,7 @@ export default async function AdminAuditLogsPage({
       skip: (currentPage - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
       include: {
-        user: { select: { name: true, email: true, role: true } },
+        actor: { select: { name: true, email: true, role: true } },
       },
     }),
     prisma.auditLog.count({ where }),
@@ -36,10 +36,10 @@ export default async function AdminAuditLogsPage({
 
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
-  const eventTypes = await prisma.auditLog.groupBy({
-    by: ["event"],
-    _count: { event: true },
-    orderBy: { _count: { event: "desc" } },
+  const actionTypes = await prisma.auditLog.groupBy({
+    by: ["action"],
+    _count: { action: true },
+    orderBy: { _count: { action: "desc" } },
   });
 
   return (
@@ -51,17 +51,17 @@ export default async function AdminAuditLogsPage({
       <div className="flex flex-wrap gap-2 text-xs">
         <a
           href="/admin/audit-logs"
-          className={`border rounded px-2 py-1 ${!eventFilter ? "bg-foreground text-background" : "hover:bg-foreground/5"}`}
+          className={`border rounded px-2 py-1 ${!actionFilter ? "bg-foreground text-background" : "hover:bg-foreground/5"}`}
         >
           All ({totalCount})
         </a>
-        {eventTypes.map((et) => (
+        {actionTypes.map((et) => (
           <a
-            key={et.event}
-            href={`/admin/audit-logs?event=${et.event}`}
-            className={`border rounded px-2 py-1 ${eventFilter === et.event ? "bg-foreground text-background" : "hover:bg-foreground/5"}`}
+            key={et.action}
+            href={`/admin/audit-logs?event=${et.action}`}
+            className={`border rounded px-2 py-1 ${actionFilter === et.action ? "bg-foreground text-background" : "hover:bg-foreground/5"}`}
           >
-            {et.event} ({et._count.event})
+            {et.action} ({et._count.action})
           </a>
         ))}
       </div>
@@ -78,14 +78,14 @@ export default async function AdminAuditLogsPage({
           </thead>
           <tbody>
             {logs.map((log) => {
-              const meta = log.metadata as Record<string, unknown> | null;
+              const meta = log.meta as Record<string, unknown> | null;
               return (
                 <tr key={log.id} className="border-t align-top">
                   <td className="p-2 whitespace-nowrap">{log.createdAt.toISOString().replace("T", " ").slice(0, 19)}</td>
                   <td className="p-2">
-                    <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-muted">{log.event}</span>
+                    <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-muted">{log.action}</span>
                   </td>
-                  <td className="p-2">{log.user?.name ?? log.user?.email ?? log.userId ?? "System"}</td>
+                  <td className="p-2">{log.actor?.name ?? log.actor?.email ?? log.actorId ?? "System"}</td>
                   <td className="p-2 max-w-md">
                     {meta ? (
                       <pre className="text-xs overflow-x-auto whitespace-pre-wrap">{JSON.stringify(meta, null, 2)}</pre>

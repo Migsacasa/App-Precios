@@ -12,30 +12,20 @@ export async function POST() {
     const cutoff = new Date();
     cutoff.setMonth(cutoff.getMonth() - retentionMonths);
 
-    // Delete old photos (files remain on disk but DB records removed)
-    const deletedPhotos = await prisma.evaluationPhoto.deleteMany({
-      where: {
-        evaluation: {
-          createdAt: { lt: cutoff },
-        },
-      },
-    });
-
-    // Delete old evaluations along with their segment inputs
-    const oldEvaluations = await prisma.storeEvaluation.findMany({
+    // Delete old evaluations (cascade deletes photos, segmentIndices, aiEvaluation, aiFindings, aiRecommendations)
+    const oldEvaluations = await prisma.evaluation.findMany({
       where: { createdAt: { lt: cutoff } },
       select: { id: true },
     });
 
     const evalIds = oldEvaluations.map((e) => e.id);
+    let deletedEvaluations = 0;
 
     if (evalIds.length > 0) {
-      await prisma.evaluationSegmentInput.deleteMany({
-        where: { evaluationId: { in: evalIds } },
-      });
-      await prisma.storeEvaluation.deleteMany({
+      const result = await prisma.evaluation.deleteMany({
         where: { id: { in: evalIds } },
       });
+      deletedEvaluations = result.count;
     }
 
     // Delete old audit logs (older than double retention)
@@ -46,13 +36,14 @@ export async function POST() {
     });
 
     await logAudit({
-      event: "retention.cleanup",
-      userId: session.user!.id,
-      metadata: {
+      action: "EVALUATION_DELETED",
+      actorId: session.user!.id,
+      entityType: "Evaluation",
+      entityId: "retention-batch",
+      meta: {
         retentionMonths,
         cutoff: cutoff.toISOString(),
-        deletedPhotos: deletedPhotos.count,
-        deletedEvaluations: evalIds.length,
+        deletedEvaluations,
         deletedAuditLogs: deletedAudit.count,
       },
     });
@@ -61,8 +52,7 @@ export async function POST() {
       ok: true,
       retentionMonths,
       cutoff: cutoff.toISOString(),
-      deletedPhotos: deletedPhotos.count,
-      deletedEvaluations: evalIds.length,
+      deletedEvaluations,
       deletedAuditLogs: deletedAudit.count,
     });
   } catch (e) {

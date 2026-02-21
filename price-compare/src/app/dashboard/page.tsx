@@ -41,14 +41,14 @@ export default async function DashboardPage({
   const city = params?.city;
 
   let stores: Awaited<ReturnType<typeof prisma.store.findMany>> = [];
-  let evaluations: Awaited<ReturnType<typeof prisma.storeEvaluation.findMany<{
-    include: { store: true; photos: true; segmentInputs: true };
+  let evaluations: Awaited<ReturnType<typeof prisma.evaluation.findMany<{
+    include: { store: true; photos: true; segmentIndices: true; aiFindings: true; aiRecommendations: true };
   }>>> = [];
 
   try {
     [stores, evaluations] = await Promise.all([
       prisma.store.findMany({ where: city ? { city } : undefined }),
-      prisma.storeEvaluation.findMany({
+      prisma.evaluation.findMany({
         where: {
           capturedAt: { gte: from, lte: to },
           ...(city ? { store: { city } } : {}),
@@ -56,7 +56,9 @@ export default async function DashboardPage({
         include: {
           store: true,
           photos: true,
-          segmentInputs: true,
+          segmentIndices: true,
+          aiFindings: true,
+          aiRecommendations: true,
         },
         orderBy: { capturedAt: "desc" },
         take: 5000,
@@ -82,10 +84,10 @@ export default async function DashboardPage({
   }
 
   const total = evaluations.length;
-  const good = evaluations.filter((item) => (item.overrideRating ?? item.aiOverallRating) === "GOOD").length;
-  const regular = evaluations.filter((item) => (item.overrideRating ?? item.aiOverallRating) === "REGULAR").length;
-  const bad = evaluations.filter((item) => (item.overrideRating ?? item.aiOverallRating) === "BAD").length;
-  const needsReview = evaluations.filter((item) => (item.overrideRating ?? item.aiOverallRating) === "NEEDS_REVIEW").length;
+  const good = evaluations.filter((item) => (item.finalRating ?? item.aiRating) === "GOOD").length;
+  const regular = evaluations.filter((item) => (item.finalRating ?? item.aiRating) === "REGULAR").length;
+  const bad = evaluations.filter((item) => (item.finalRating ?? item.aiRating) === "BAD").length;
+  const needsReview = evaluations.filter((item) => (item.finalRating ?? item.aiRating) === "NEEDS_REVIEW").length;
 
   const coverage = stores.length ? (latestByStore.size / stores.length) * 100 : 0;
 
@@ -104,7 +106,7 @@ export default async function DashboardPage({
     const key = dateKey(evaluation.capturedAt);
     const current = trendMap.get(key) ?? { good: 0, total: 0 };
     current.total += 1;
-    if ((evaluation.overrideRating ?? evaluation.aiOverallRating) === "GOOD") current.good += 1;
+    if ((evaluation.finalRating ?? evaluation.aiRating) === "GOOD") current.good += 1;
     trendMap.set(key, current);
   }
 
@@ -114,7 +116,7 @@ export default async function DashboardPage({
 
   const segmentScores = new Map<string, number[]>();
   for (const evaluation of evaluations) {
-    for (const input of evaluation.segmentInputs) {
+    for (const input of evaluation.segmentIndices) {
       const key = input.segment;
       const values = segmentScores.get(key) ?? [];
       values.push(Number(input.priceIndex));
@@ -129,13 +131,10 @@ export default async function DashboardPage({
 
   // Drivers analysis: which evidence types co-occur with BAD ratings
   const driverCounts = new Map<string, number>();
-  const badEvals = evaluations.filter((e) => (e.overrideRating ?? e.aiOverallRating) === "BAD");
+  const badEvals = evaluations.filter((e) => (e.finalRating ?? e.aiRating) === "BAD");
   for (const e of badEvals) {
-    const ev = e.aiEvidence as Array<{ type: string }> | null;
-    if (ev) {
-      for (const item of ev) {
-        driverCounts.set(item.type, (driverCounts.get(item.type) ?? 0) + 1);
-      }
+    for (const finding of e.aiFindings) {
+      driverCounts.set(finding.type, (driverCounts.get(finding.type) ?? 0) + 1);
     }
   }
   const drivers = Array.from(driverCounts.entries())
@@ -146,16 +145,13 @@ export default async function DashboardPage({
   // Top 10 action items from recommendations
   const actionItems: Array<{ store: string; action: string; priority: string }> = [];
   for (const e of evaluations) {
-    const recs = e.aiRecommendations as Array<{ action: string; priority: string }> | null;
-    if (recs) {
-      for (const r of recs) {
-        if (actionItems.length >= 10) break;
-        actionItems.push({
-          store: `${e.store.customerCode} · ${e.store.customerName}`,
-          action: r.action,
-          priority: r.priority ?? "medium",
-        });
-      }
+    for (const r of e.aiRecommendations) {
+      if (actionItems.length >= 10) break;
+      actionItems.push({
+        store: `${e.store.customerCode} · ${e.store.name}`,
+        action: r.action,
+        priority: r.priority ?? "P2",
+      });
     }
     if (actionItems.length >= 10) break;
   }
@@ -263,11 +259,11 @@ export default async function DashboardPage({
             <tbody>
               {stores.map((store) => {
                 const latest = latestByStore.get(store.id);
-                const effectiveRating = latest?.overrideRating ?? latest?.aiOverallRating ?? "NO_IMAGE";
+                const effectiveRating = latest?.finalRating ?? latest?.aiRating ?? "NEEDS_REVIEW";
                 return (
                   <tr key={store.id} className="border-t">
                     <td className="p-2">{store.customerCode}</td>
-                    <td className="p-2">{store.customerName}</td>
+                    <td className="p-2">{store.name}</td>
                     <td className="p-2">{latest ? latest.capturedAt.toISOString().slice(0, 10) : "-"}</td>
                     <td className="p-2">
                       <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${ratingBadge(effectiveRating)}`}>

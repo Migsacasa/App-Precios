@@ -5,13 +5,14 @@ import { requireAdmin, SecurityError } from "@/lib/security";
 
 const schema = z.object({
   customerCode: z.string().min(1).optional(),
-  customerName: z.string().min(2).optional(),
+  name: z.string().min(2).optional(),
   chain: z.string().optional(),
-  address: z.string().optional(),
+  zone: z.string().optional(),
+  route: z.string().optional(),
   city: z.string().optional(),
   lat: z.coerce.number().optional(),
   lng: z.coerce.number().optional(),
-  isActive: z.coerce.boolean().optional(),
+  active: z.coerce.boolean().optional(),
 });
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -26,13 +27,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       where: { id },
       data: {
         ...(parsed.customerCode != null ? { customerCode: parsed.customerCode.trim() } : {}),
-        ...(parsed.customerName != null ? { customerName: parsed.customerName.trim() } : {}),
+        ...(parsed.name != null ? { name: parsed.name.trim() } : {}),
         ...(parsed.chain != null ? { chain: parsed.chain.trim() || null } : {}),
-        ...(parsed.address != null ? { address: parsed.address } : {}),
+        ...(parsed.zone != null ? { zone: parsed.zone.trim() || null } : {}),
+        ...(parsed.route != null ? { route: parsed.route.trim() || null } : {}),
         ...(parsed.city != null ? { city: parsed.city || null } : {}),
         ...(parsed.lat != null ? { lat: parsed.lat } : {}),
         ...(parsed.lng != null ? { lng: parsed.lng } : {}),
-        ...(parsed.isActive != null ? { isActive: parsed.isActive } : {}),
+        ...(parsed.active != null ? { active: parsed.active } : {}),
       },
     });
 
