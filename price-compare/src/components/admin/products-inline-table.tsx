@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { apiFetchJson, formatApiError } from "@/lib/api-client";
+import { apiFetchJson, showApiErrorToast } from "@/lib/api-client";
 
 type ProductRow = {
   id: string;
@@ -36,7 +36,7 @@ export function ProductsInlineTable({ initialRows }: { initialRows: ProductRow[]
 
       toast.success(`Updated ${row.name}`);
     } catch (error) {
-      toast.error(formatApiError(error, "Failed to update"));
+      showApiErrorToast(toast, error, "Failed to update");
     } finally {
       setSavingId(null);
     }

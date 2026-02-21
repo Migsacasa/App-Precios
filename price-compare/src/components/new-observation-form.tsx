@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { apiFetchJson, formatApiError } from "@/lib/api-client";
+import { apiFetchJson, showApiErrorToast } from "@/lib/api-client";
 import { countPending, enqueueObservation, syncPending } from "@/lib/offline-db";
 import { checkImageQuality, compressImage, type ImageQualityReport } from "@/lib/image-quality";
 import { toast } from "sonner";
@@ -256,7 +256,7 @@ export function NewObservationForm({
       setAnalysis(data.analysis);
       toast.success("AI review complete");
     } catch (error) {
-      toast.error(formatApiError(error, "AI analysis failed"));
+      showApiErrorToast(toast, error, "AI analysis failed");
     } finally {
       setAnalyzing(false);
     }
@@ -354,7 +354,7 @@ export function NewObservationForm({
       toast.success("Evaluation saved");
       router.push("/observations");
     } catch (error) {
-      toast.error(formatApiError(error, "Save failed"));
+      showApiErrorToast(toast, error, "Save failed");
     } finally {
       setSaving(false);
     }

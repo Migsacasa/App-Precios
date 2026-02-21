@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { apiFetchJson, formatApiError } from "@/lib/api-client";
+import { apiFetchJson, showApiErrorToast } from "@/lib/api-client";
 
 const StoreMapPicker = dynamic(
   () => import("@/components/admin/store-map-picker").then((m) => m.StoreMapPicker),
@@ -70,7 +70,7 @@ export function StoreEditor({ stores }: { stores: StoreOption[] }) {
 
       toast.success("Store updated");
     } catch (error) {
-      toast.error(formatApiError(error, "Failed to update store"));
+      showApiErrorToast(toast, error, "Failed to update store");
     } finally {
       setSaving(false);
     }

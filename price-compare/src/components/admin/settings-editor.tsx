@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { apiFetchJson, formatApiError } from "@/lib/api-client";
+import { apiFetchJson, showApiErrorToast } from "@/lib/api-client";
 
 const SETTING_GROUPS = [
   {
@@ -52,7 +52,7 @@ export function SettingsEditor({ initialSettings }: { initialSettings: Record<st
       setSettings((prev) => ({ ...prev, [key]: value }));
       toast.success(`Updated ${key}`);
     } catch (err) {
-      toast.error(formatApiError(err, "Failed to save"));
+      showApiErrorToast(toast, err, "Failed to save");
     } finally {
       setSaving(null);
     }
@@ -115,7 +115,7 @@ function RetentionCleanup() {
       setResult(data);
       toast.success("Retention cleanup complete");
     } catch (err) {
-      toast.error(formatApiError(err, "Cleanup failed"));
+      showApiErrorToast(toast, err, "Cleanup failed");
     } finally {
       setRunning(false);
     }

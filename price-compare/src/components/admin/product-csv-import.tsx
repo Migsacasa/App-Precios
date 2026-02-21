@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { apiFetchJson, formatApiError } from "@/lib/api-client";
+import { apiFetchJson, showApiErrorToast } from "@/lib/api-client";
 
 export function ProductCsvImport() {
   const router = useRouter();
@@ -30,7 +30,7 @@ export function ProductCsvImport() {
       toast.success(`Imported: ${data.created} created, ${data.updated} updated`);
       router.refresh();
     } catch (err) {
-      toast.error(formatApiError(err, "Import failed"));
+      showApiErrorToast(toast, err, "Import failed");
     } finally {
       setUploading(false);
     }

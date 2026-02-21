@@ -20,6 +20,11 @@ export class ApiClientError extends Error {
   }
 }
 
+export type ToastApi = {
+  error: (message: string, options?: { action?: { label: string; onClick: () => void } }) => void;
+  success: (message: string) => void;
+};
+
 function isJsonResponse(res: Response): boolean {
   const contentType = res.headers.get("content-type") ?? "";
   return contentType.toLowerCase().includes("application/json");
@@ -67,4 +72,27 @@ export function formatApiError(error: unknown, fallback = "Request failed"): str
     return error.message || fallback;
   }
   return fallback;
+}
+
+export function showApiErrorToast(toast: ToastApi, error: unknown, fallback = "Request failed") {
+  const message = formatApiError(error, fallback);
+  if (error instanceof ApiClientError && error.requestId) {
+    toast.error(message, {
+      action: {
+        label: "Copy ID",
+        onClick: () => {
+          if (!navigator?.clipboard?.writeText) {
+            toast.error("Could not copy request ID");
+            return;
+          }
+          void navigator.clipboard
+            .writeText(error.requestId!)
+            .then(() => toast.success("Request ID copied"))
+            .catch(() => toast.error("Could not copy request ID"));
+        },
+      },
+    });
+    return;
+  }
+  toast.error(message);
 }

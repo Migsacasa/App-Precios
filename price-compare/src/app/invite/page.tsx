@@ -5,7 +5,7 @@ import { useSession } from "next-auth/react";
 import { redirect } from "next/navigation";
 import { Mail, Phone, Send, Clock, Loader2, UserPlus, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
-import { ApiClientError, apiFetchJson, formatApiError } from "@/lib/api-client";
+import { apiFetchJson, formatApiError, showApiErrorToast } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 
 type InviteType = "email" | "whatsapp";
@@ -29,27 +29,6 @@ export default function InvitePage() {
   const [error, setError] = useState<string | null>(null);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [loading, setLoading] = useState(true);
-
-  function showApiErrorToast(err: unknown, fallback: string) {
-    const message = formatApiError(err, fallback);
-    if (err instanceof ApiClientError && err.requestId) {
-      toast.error(message, {
-        action: {
-          label: "Copy ID",
-          onClick: async () => {
-            try {
-              await navigator.clipboard.writeText(err.requestId!);
-              toast.success("Request ID copied");
-            } catch {
-              toast.error("Could not copy request ID");
-            }
-          },
-        },
-      });
-      return;
-    }
-    toast.error(message);
-  }
 
   if (authStatus === "unauthenticated") redirect("/login");
 
@@ -101,7 +80,7 @@ export default function InvitePage() {
     } catch (err) {
       const message = formatApiError(err, "Network error. Please try again.");
       setError(message);
-      showApiErrorToast(err, "Failed to send invitation");
+      showApiErrorToast(toast, err, "Failed to send invitation");
     } finally {
       setSending(false);
     }

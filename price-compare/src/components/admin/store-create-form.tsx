@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { apiFetchJson, formatApiError } from "@/lib/api-client";
+import { apiFetchJson, showApiErrorToast } from "@/lib/api-client";
 
 export function StoreCreateForm() {
   const [customerCode, setCustomerCode] = useState("");
@@ -34,7 +34,7 @@ export function StoreCreateForm() {
       toast.success("Store created");
       window.location.reload();
     } catch (error) {
-      toast.error(formatApiError(error, "Create failed"));
+      showApiErrorToast(toast, error, "Create failed");
     } finally {
       setSaving(false);
     }

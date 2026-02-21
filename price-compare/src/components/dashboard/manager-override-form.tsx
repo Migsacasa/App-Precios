@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { apiFetchJson, formatApiError } from "@/lib/api-client";
+import { apiFetchJson, showApiErrorToast } from "@/lib/api-client";
 
 const RATING_OPTIONS = ["GOOD", "REGULAR", "BAD"] as const;
 
@@ -48,7 +48,7 @@ export function ManagerOverrideForm({
       toast.success("Override applied");
       router.refresh();
     } catch (err) {
-      toast.error(formatApiError(err, "Override failed"));
+      showApiErrorToast(toast, err, "Override failed");
     } finally {
       setSubmitting(false);
     }
