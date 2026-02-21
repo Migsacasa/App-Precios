@@ -351,7 +351,7 @@ export function NewObservationForm({
 
     setSaving(true);
     try {
-      const response = await fetch("/api/observations", { method: "POST", body: formData });
+      const response = await fetch("/api/evaluations", { method: "POST", body: formData });
       if (!response.ok) {
         throw new Error(await response.text());
       }

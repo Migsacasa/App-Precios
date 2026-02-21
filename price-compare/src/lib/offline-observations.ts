@@ -117,7 +117,7 @@ export async function syncPending(): Promise<{ synced: number; failed: number }>
           });
         }
 
-        const res = await fetch("/api/observations", { method: "POST", body: fd });
+        const res = await fetch("/api/evaluations", { method: "POST", body: fd });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
         await deletePendingObservation(item.id);
