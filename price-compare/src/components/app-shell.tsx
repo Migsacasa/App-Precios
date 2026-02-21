@@ -15,6 +15,7 @@ import {
   X,
   LogOut,
   User,
+  UserPlus,
   Settings,
   ScrollText,
 } from "lucide-react";
@@ -27,6 +28,7 @@ const navItems = [
   { href: "/reports", label: "Reports", icon: BarChart3 },
   { href: "/map", label: "Map", icon: Map },
   { href: "/stores", label: "Stores", icon: Store },
+  { href: "/invite", label: "Invite", icon: UserPlus },
   { href: "/admin/products", label: "Admin · Products", icon: Boxes },
   { href: "/admin/stores", label: "Admin · Stores", icon: Store },
   { href: "/admin/settings", label: "Admin · Settings", icon: Settings },
@@ -38,7 +40,7 @@ const mobileTabItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/reports", label: "Reports", icon: BarChart3 },
   { href: "/map", label: "Map", icon: Map },
-  { href: "/stores", label: "Stores", icon: Store },
+  { href: "/invite", label: "Invite", icon: UserPlus },
 ];
 
 function NavLinks({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {

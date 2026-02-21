@@ -59,6 +59,7 @@ model User {
   evaluations   StoreEvaluation[]
   overrides     StoreEvaluation[]   @relation("OverriddenByUser")
   auditLogs     AuditLog[]
+  invitations   Invitation[]
 }
 
 model Competitor {
@@ -331,6 +332,20 @@ model ObservationPhoto {
   height Int?
 
   createdAt DateTime @default(now())
+}
+
+model Invitation {
+  id        String   @id @default(cuid())
+  type      String   // "email" or "whatsapp"
+  target    String   // email address or phone number
+  message   String?
+  sentById  String
+  sentBy    User     @relation(fields: [sentById], references: [id])
+  status    String   @default("sent")
+  createdAt DateTime @default(now())
+
+  @@index([sentById])
+  @@index([target])
 }
 
 model AiInsight {
