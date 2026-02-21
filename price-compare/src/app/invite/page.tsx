@@ -5,7 +5,8 @@ import { useSession } from "next-auth/react";
 import { redirect } from "next/navigation";
 import { Mail, Phone, Send, Clock, Loader2, UserPlus, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
-import { apiFetchJson, formatApiError, showApiErrorToast } from "@/lib/api-client";
+import { apiFetchJson, formatApiError, getApiErrorRequestId, showApiErrorToast } from "@/lib/api-client";
+import { RequestIdChip } from "@/components/request-id-chip";
 import { cn } from "@/lib/utils";
 
 type InviteType = "email" | "whatsapp";
@@ -27,6 +28,7 @@ export default function InvitePage() {
   const [sending, setSending] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [errorRequestId, setErrorRequestId] = useState<string | null>(null);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -50,6 +52,7 @@ export default function InvitePage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setErrorRequestId(null);
     setSuccess(null);
     setSending(true);
 
@@ -80,6 +83,7 @@ export default function InvitePage() {
     } catch (err) {
       const message = formatApiError(err, "Network error. Please try again.");
       setError(message);
+      setErrorRequestId(getApiErrorRequestId(err));
       showApiErrorToast(toast, err, "Failed to send invitation");
     } finally {
       setSending(false);
@@ -176,8 +180,9 @@ export default function InvitePage() {
 
         {/* Status messages */}
         {error && (
-          <div className="rounded-md bg-red-500/10 text-red-600 px-3 py-2 text-sm">
-            {error}
+          <div className="rounded-md bg-red-500/10 text-red-600 px-3 py-2 text-sm space-y-2">
+            <p>{error}</p>
+            {errorRequestId ? <RequestIdChip requestId={errorRequestId} /> : null}
           </div>
         )}
         {success && (

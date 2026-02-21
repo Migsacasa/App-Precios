@@ -74,6 +74,13 @@ export function formatApiError(error: unknown, fallback = "Request failed"): str
   return fallback;
 }
 
+export function getApiErrorRequestId(error: unknown): string | null {
+  if (error instanceof ApiClientError) {
+    return error.requestId ?? null;
+  }
+  return null;
+}
+
 export function showApiErrorToast(toast: ToastApi, error: unknown, fallback = "Request failed") {
   const message = formatApiError(error, fallback);
   if (error instanceof ApiClientError && error.requestId) {

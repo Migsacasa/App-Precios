@@ -1,10 +1,13 @@
 /* prisma/seed.ts */
 import { PrismaClient, Role, Segment } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({
+  adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL! }),
+});
 
 type StoreCsvRow = {
   customerCode: string;
