@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { rateLimitRequest } from "@/lib/rate-limit";
 import { requireManager, SecurityError } from "@/lib/security";
 
 function csvEscape(v: unknown) {
@@ -10,6 +11,14 @@ function csvEscape(v: unknown) {
 
 export async function GET(req: NextRequest) {
   try {
+    const limiter = rateLimitRequest(req, { key: "api:reports:export", limit: 10, windowMs: 60_000 });
+    if (!limiter.ok) {
+      return new Response(JSON.stringify({ error: "Too many requests" }), {
+        status: 429,
+        headers: { "Content-Type": "application/json", ...limiter.headers },
+      });
+    }
+
     await requireManager();
 
     const url = new URL(req.url);
@@ -106,6 +115,7 @@ export async function GET(req: NextRequest) {
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
         "Content-Disposition": `attachment; filename="${filename}"`,
+        ...limiter.headers,
       },
     });
   } catch (error) {

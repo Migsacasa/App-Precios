@@ -1,11 +1,20 @@
 import PDFDocument from "pdfkit";
 import { prisma } from "@/lib/prisma";
+import { rateLimitRequest } from "@/lib/rate-limit";
 import { requireManager, SecurityError } from "@/lib/security";
 
 export const runtime = "nodejs";
 
 export async function GET(req: Request) {
   try {
+    const limiter = rateLimitRequest(req, { key: "api:reports:export:pdf", limit: 5, windowMs: 60_000 });
+    if (!limiter.ok) {
+      return new Response(JSON.stringify({ error: "Too many requests" }), {
+        status: 429,
+        headers: { "Content-Type": "application/json", ...limiter.headers },
+      });
+    }
+
     await requireManager();
 
     const url = new URL(req.url);
@@ -118,6 +127,7 @@ export async function GET(req: Request) {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": "attachment; filename=market_report.pdf",
+        ...limiter.headers,
       },
     });
   } catch (error) {

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin, SecurityError } from "@/lib/security";
 import { getSettings, setSetting } from "@/lib/settings";
-import { logAudit } from "@/lib/audit";
 import { z } from "zod";
 
 const updateSchema = z.object({
@@ -31,14 +30,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: parsed.error.message }, { status: 400 });
     }
 
-    await setSetting(parsed.data.key, parsed.data.value);
-    await logAudit({
-      action: "STORE_UPDATED",
-      actorId: session.user!.id,
-      entityType: "Settings",
-      entityId: parsed.data.key,
-      meta: { key: parsed.data.key, value: parsed.data.value },
-    });
+    await setSetting(parsed.data.key, parsed.data.value, { actorId: session.user!.id });
 
     return NextResponse.json({ ok: true });
   } catch (e) {
