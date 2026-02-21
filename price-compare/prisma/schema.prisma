@@ -1,0 +1,356 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite" // or "postgresql"
+}
+
+enum Role {
+  FIELD
+  MANAGER
+  ADMIN
+}
+
+enum PriceSource {
+  MANUAL
+  OCR
+  BOTH
+}
+
+enum Segment {
+  LUBRICANTS
+  BATTERIES
+  TIRES
+}
+
+enum AiOverallRating {
+  BAD
+  REGULAR
+  GOOD
+  NEEDS_REVIEW
+  NO_IMAGE
+}
+
+enum PhotoType {
+  WIDE_SHOT
+  SHELF_CLOSEUP
+  OTHER
+}
+
+enum SyncStatus {
+  PENDING
+  UPLOADING
+  SYNCED
+  FAILED
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String?
+  role         Role     @default(FIELD)
+  passwordHash String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  observations  Observation[]       @relation("ObservationByUser")
+  aiInsights    AiInsight[]         @relation("AiInsightByUser")
+  evaluations   StoreEvaluation[]
+  overrides     StoreEvaluation[]   @relation("OverriddenByUser")
+  auditLogs     AuditLog[]
+}
+
+model Competitor {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  chain     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  stores Store[]
+}
+
+model Store {
+  id String @id @default(cuid())
+
+  customerCode String @unique
+  customerName String
+
+  lat Float
+  lng Float
+
+  city    String?
+  address String?
+  chain   String?
+  zone    String?
+  route   String?
+  storeSegment String?
+
+  competitorId String?
+  competitor   Competitor? @relation(fields: [competitorId], references: [id])
+  name         String?
+  branch       String?
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  observations Observation[]
+  evaluations  StoreEvaluation[]
+
+  @@index([competitorId])
+  @@index([city])
+  @@index([zone])
+}
+
+model StoreEvaluation {
+  id String @id @default(cuid())
+
+  clientEvaluationId String? @unique
+
+  storeId String
+  store   Store @relation(fields: [storeId], references: [id])
+
+  evaluatorUserId String
+  evaluatorUser   User @relation(fields: [evaluatorUserId], references: [id])
+
+  capturedAt DateTime @default(now())
+
+  // AI scoring
+  aiOverallRating AiOverallRating @default(NO_IMAGE)
+  aiScore         Int?
+  aiConfidence    Float?
+  aiSummary       String?
+  aiWhyBullets    Json?
+  aiEvidence      Json?
+  aiRecommendations Json?
+  aiJson          Json?
+
+  // Manager override
+  overrideRating  AiOverallRating?
+  overriddenById  String?
+  overriddenBy    User?    @relation("OverriddenByUser", fields: [overriddenById], references: [id])
+  overriddenAt    DateTime?
+  overrideReason  String?
+
+  // Sync
+  syncStatus SyncStatus @default(SYNCED)
+
+  notes String?
+
+  gpsAtCaptureLat Float?
+  gpsAtCaptureLng Float?
+
+  photos        EvaluationPhoto[]
+  segmentInputs EvaluationSegmentInput[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([storeId, capturedAt])
+  @@index([evaluatorUserId, capturedAt])
+}
+
+model EvaluationPhoto {
+  id String @id @default(cuid())
+
+  evaluationId String
+  evaluation   StoreEvaluation @relation(fields: [evaluationId], references: [id])
+
+  url       String
+  mime      String?
+  width     Int?
+  height    Int?
+  photoType PhotoType @default(WIDE_SHOT)
+  sortOrder Int       @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@index([evaluationId])
+}
+
+model EvaluationSegmentInput {
+  id String @id @default(cuid())
+
+  evaluationId String
+  evaluation   StoreEvaluation @relation(fields: [evaluationId], references: [id])
+
+  segment Segment
+  slot    Int
+
+  priceIndex     Float
+  competitorPrice Float?
+  ourPrice        Float?
+  isManualOverride Boolean @default(false)
+  competitorName String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([evaluationId, segment, slot])
+  @@index([segment])
+}
+
+model OurProduct {
+  id String @id @default(cuid())
+
+  segment Segment
+
+  productName String
+  specs       String?
+
+  ourPrice Decimal
+
+  referencePhotoUrl String?
+
+  isActive Boolean @default(true)
+
+  effectiveFrom DateTime @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  priceHistory ProductPriceHistory[]
+
+  @@index([segment])
+}
+
+model ProductPriceHistory {
+  id        String   @id @default(cuid())
+  productId String
+  product   OurProduct @relation(fields: [productId], references: [id])
+
+  ourPrice      Decimal
+  effectiveFrom DateTime @default(now())
+  changedBy     String?
+
+  createdAt DateTime @default(now())
+
+  @@index([productId, effectiveFrom])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  event     String
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  evaluationId String?
+  storeId      String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([event])
+  @@index([userId])
+  @@index([evaluationId])
+  @@index([createdAt])
+}
+
+model AppSettings {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+
+  @@map("app_settings")
+}
+
+model Category {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  products Product[]
+}
+
+model Product {
+  id         String   @id @default(cuid())
+  sku        String?  @unique
+  name       String
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id])
+
+  unit     String?
+  ourPrice Decimal
+  weight   Decimal @default(1.0)
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  observations Observation[]
+
+  @@index([categoryId])
+}
+
+model Observation {
+  id String @id @default(cuid())
+
+  clientUuid String? @unique
+
+  storeId String
+  store   Store  @relation(fields: [storeId], references: [id])
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+
+  capturedById String
+  capturedBy   User @relation("ObservationByUser", fields: [capturedById], references: [id])
+
+  observedPrice Decimal
+  currency      String      @default("NIO")
+  source        PriceSource @default(MANUAL)
+
+  ocrText String?
+
+  capturedAt DateTime @default(now())
+
+  obsLat       Float?
+  obsLng       Float?
+  gpsAccuracyM Float?
+
+  notes String?
+
+  photos ObservationPhoto[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([storeId, capturedAt])
+  @@index([productId, capturedAt])
+}
+
+model ObservationPhoto {
+  id            String      @id @default(cuid())
+  observationId String
+  observation   Observation @relation(fields: [observationId], references: [id])
+
+  url    String
+  mime   String?
+  width  Int?
+  height Int?
+
+  createdAt DateTime @default(now())
+}
+
+model AiInsight {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  generatedById String
+  generatedBy   User @relation("AiInsightByUser", fields: [generatedById], references: [id])
+
+  scope        String
+  storeId      String?
+  competitorId String?
+  city         String?
+  from         DateTime?
+  to           DateTime?
+
+  summary String
+  json    Json
+
+  @@index([scope])
+  @@index([storeId])
+  @@index([competitorId])
+}

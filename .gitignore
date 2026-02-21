@@ -1,0 +1,10 @@
+node_modules
+.next
+.env
+.env.*
+!.env.example
+*.db
+*.db-journal
+price-compare/public/uploads/*
+!price-compare/public/uploads/.gitkeep
+package-lock.json

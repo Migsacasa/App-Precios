@@ -1,0 +1,8 @@
+{
+  "name": "Price Compare",
+  "short_name": "PriceCompare",
+  "start_url": "/observations",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#000000"
+}

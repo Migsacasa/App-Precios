@@ -1,0 +1,13 @@
+{
+  "name": "app-precios-workspace",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -k -n WEB,API -c cyan,green \"cd price-compare && npm run dev -- -p 3000\" \"cd App-Precios && npm run start\"",
+    "dev:reset": "fuser -k 3000/tcp || true && fuser -k 3001/tcp || true && npm run dev",
+    "dev:web": "cd price-compare && npm run dev -- -p 3000",
+    "dev:api": "cd App-Precios && npm run start"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
