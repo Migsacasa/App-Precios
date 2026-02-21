@@ -1,30 +1,31 @@
 export const runtime = "nodejs";
 
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { jsonError, jsonOk } from "@/lib/api-response";
 import { rateLimitRequest } from "@/lib/rate-limit";
 
 export async function POST(req: NextRequest) {
   const limiter = rateLimitRequest(req, { key: "api:ocr", limit: 20, windowMs: 60_000 });
   if (!limiter.ok) {
-    return NextResponse.json({ error: "Too many requests" }, { status: 429, headers: limiter.headers });
+    return jsonError(req, { code: "RATE_LIMITED", message: "Too many requests" }, 429, { headers: limiter.headers });
   }
 
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return jsonError(req, { code: "UNAUTHORIZED", message: "Unauthorized" }, 401);
   }
 
   const apiKey = process.env.GOOGLE_VISION_API_KEY;
   if (!apiKey) {
-    return NextResponse.json({ error: "Google Vision not configured" }, { status: 400 });
+    return jsonError(req, { code: "VISION_NOT_CONFIGURED", message: "Google Vision not configured" }, 400);
   }
 
   const form = await req.formData();
   const file = form.get("photo") as File | null;
   if (!file) {
-    return NextResponse.json({ error: "Missing photo" }, { status: 400 });
+    return jsonError(req, { code: "PHOTO_REQUIRED", message: "Missing photo" }, 400);
   }
 
   const bytes = Buffer.from(await file.arrayBuffer());
@@ -50,10 +51,7 @@ export async function POST(req: NextRequest) {
 
   if (!response.ok) {
     const err = await response.text();
-    return NextResponse.json(
-      { error: "Vision API error", details: err },
-      { status: 500 },
-    );
+    return jsonError(req, { code: "VISION_API_ERROR", message: "Vision API error", details: err }, 500);
   }
 
   const json = await response.json();
@@ -62,5 +60,5 @@ export async function POST(req: NextRequest) {
     json?.responses?.[0]?.textAnnotations?.[0]?.description ||
     "";
 
-  return NextResponse.json({ ok: true, text });
+  return jsonOk(req, { text }, { headers: limiter.headers });
 }

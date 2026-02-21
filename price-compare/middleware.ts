@@ -19,21 +19,46 @@ function minRole(pathname: string) {
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const required = minRole(pathname);
-  if (!required) return NextResponse.next();
+  const requestId = req.headers.get("x-request-id") ?? crypto.randomUUID();
+  const requestHeaders = new Headers(req.headers);
+  requestHeaders.set("x-request-id", requestId);
+
+  if (!required) {
+    const response = NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    });
+    response.headers.set("x-request-id", requestId);
+    return response;
+  }
 
   const token = await getToken({ req });
-  if (!token) return NextResponse.redirect(new URL("/login", req.url));
+  if (!token) {
+    const response = NextResponse.redirect(new URL("/login", req.url));
+    response.headers.set("x-request-id", requestId);
+    return response;
+  }
 
   const userRole = (token.role as "FIELD" | "MANAGER" | "ADMIN") ?? "FIELD";
   if (ROLE_ORDER[userRole] < ROLE_ORDER[required]) {
-    return NextResponse.redirect(new URL("/unauthorized", req.url));
+    const response = NextResponse.redirect(new URL("/unauthorized", req.url));
+    response.headers.set("x-request-id", requestId);
+    return response;
   }
 
-  return NextResponse.next();
+  const response = NextResponse.next({
+    request: {
+      headers: requestHeaders,
+    },
+  });
+  response.headers.set("x-request-id", requestId);
+  return response;
 }
 
 export const config = {
   matcher: [
+    "/api/:path*",
     "/capture/:path*",
     "/observations/:path*",
     "/dashboard/:path*",

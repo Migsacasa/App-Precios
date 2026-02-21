@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { jsonError, withRequestIdHeader } from "@/lib/api-response";
 import { StoreEvaluationPdf, type PdfData } from "@/components/pdf/store-evaluation-pdf";
 import { requireManager, SecurityError } from "@/lib/security";
 import { renderToStream } from "@react-pdf/renderer";
 
 export const runtime = "nodejs";
 
-export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     await requireManager();
     const { id } = await params;
@@ -24,7 +25,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
       },
     });
 
-    if (!ev) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    if (!ev) return jsonError(req, { code: "NOT_FOUND", message: "Not found" }, 404);
 
     const json: any = ev.aiEvaluation?.outputJson ?? {};
     const data: PdfData = {
@@ -73,15 +74,15 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     const stream = await renderToStream(<StoreEvaluationPdf data={data} />);
 
     return new NextResponse(stream as any, {
-      headers: {
+      headers: withRequestIdHeader(req, {
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="evaluation-${id}.pdf"`,
-      },
+      }),
     });
   } catch (error) {
     if (error instanceof SecurityError) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
+      return jsonError(req, { code: "SECURITY_ERROR", message: error.message }, error.status);
     }
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    return jsonError(req, { code: "INTERNAL_ERROR", message: "Internal Server Error" }, 500);
   }
 }

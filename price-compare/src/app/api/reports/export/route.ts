@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { jsonError, withRequestIdHeader } from "@/lib/api-response";
 import { rateLimitRequest } from "@/lib/rate-limit";
 import { requireManager, SecurityError } from "@/lib/security";
 
@@ -13,9 +14,8 @@ export async function GET(req: NextRequest) {
   try {
     const limiter = rateLimitRequest(req, { key: "api:reports:export", limit: 10, windowMs: 60_000 });
     if (!limiter.ok) {
-      return new Response(JSON.stringify({ error: "Too many requests" }), {
-        status: 429,
-        headers: { "Content-Type": "application/json", ...limiter.headers },
+      return jsonError(req, { code: "RATE_LIMITED", message: "Too many requests" }, 429, {
+        headers: limiter.headers,
       });
     }
 
@@ -112,22 +112,16 @@ export async function GET(req: NextRequest) {
     const filename = type === "snapshot" ? "store_snapshot.csv" : "evaluation_history.csv";
 
     return new Response(lines.join("\n"), {
-      headers: {
+      headers: withRequestIdHeader(req, {
         "Content-Type": "text/csv; charset=utf-8",
         "Content-Disposition": `attachment; filename="${filename}"`,
         ...limiter.headers,
-      },
+      }),
     });
   } catch (error) {
     if (error instanceof SecurityError) {
-      return new Response(JSON.stringify({ error: error.message }), {
-        status: error.status,
-        headers: { "Content-Type": "application/json" },
-      });
+      return jsonError(req, { code: "SECURITY_ERROR", message: error.message }, error.status);
     }
-    return new Response(JSON.stringify({ error: "Internal Server Error" }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
+    return jsonError(req, { code: "INTERNAL_ERROR", message: "Internal Server Error" }, 500);
   }
 }

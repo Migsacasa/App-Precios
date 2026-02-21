@@ -1,5 +1,6 @@
 import PDFDocument from "pdfkit";
 import { prisma } from "@/lib/prisma";
+import { jsonError, withRequestIdHeader } from "@/lib/api-response";
 import { rateLimitRequest } from "@/lib/rate-limit";
 import { requireManager, SecurityError } from "@/lib/security";
 
@@ -9,9 +10,8 @@ export async function GET(req: Request) {
   try {
     const limiter = rateLimitRequest(req, { key: "api:reports:export:pdf", limit: 5, windowMs: 60_000 });
     if (!limiter.ok) {
-      return new Response(JSON.stringify({ error: "Too many requests" }), {
-        status: 429,
-        headers: { "Content-Type": "application/json", ...limiter.headers },
+      return jsonError(req, { code: "RATE_LIMITED", message: "Too many requests" }, 429, {
+        headers: limiter.headers,
       });
     }
 
@@ -124,24 +124,18 @@ export async function GET(req: Request) {
     const buffer = await done;
 
     return new Response(new Uint8Array(buffer), {
-      headers: {
+      headers: withRequestIdHeader(req, {
         "Content-Type": "application/pdf",
         "Content-Disposition": "attachment; filename=market_report.pdf",
         ...limiter.headers,
-      },
+      }),
     });
   } catch (error) {
     if (error instanceof SecurityError) {
-      return new Response(JSON.stringify({ error: error.message }), {
-        status: error.status,
-        headers: { "Content-Type": "application/json" },
-      });
+      return jsonError(req, { code: "SECURITY_ERROR", message: error.message }, error.status);
     }
 
     const message = error instanceof Error ? error.message : "Internal Server Error";
-    return new Response(JSON.stringify({ error: message }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
+    return jsonError(req, { code: "INTERNAL_ERROR", message }, 500);
   }
 }
