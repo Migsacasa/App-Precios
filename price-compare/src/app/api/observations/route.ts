@@ -230,7 +230,24 @@ export async function POST(req: NextRequest) {
   // Server-side AI if no client AI and photos exist
   if (!aiJson && uploadedPhotos.length > 0) {
     try {
-      const analysis = await analyzeStorePhotos(uploadedPhotos.map((p) => p.url));
+      // Fetch store context for richer AI prompts
+      const storeData = await prisma.store.findUnique({
+        where: { id: storeId },
+        select: { id: true, customerCode: true, customerName: true, city: true, zone: true },
+      });
+      const analysis = await analyzeStorePhotos(
+        uploadedPhotos.map((p) => p.url),
+        {
+          store: storeData ? {
+            storeId: storeData.id,
+            customerCode: storeData.customerCode,
+            name: storeData.customerName,
+            city: storeData.city ?? undefined,
+            zone: storeData.zone ?? undefined,
+          } : undefined,
+          photoTypes: uploadedPhotos.map((p) => p.photoType as "WIDE_SHOT" | "SHELF_CLOSEUP" | "OTHER"),
+        },
+      );
       aiOverallRating = analysis.rating;
       aiScore = analysis.score;
       aiConfidence = analysis.confidence;

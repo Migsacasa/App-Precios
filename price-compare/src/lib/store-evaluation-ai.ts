@@ -6,11 +6,29 @@ import {
   type AiStoreEvaluation,
   type ScoringThresholds,
 } from "@/lib/schemas/evaluation";
+import { buildStoreEvaluationPrompts } from "@/lib/schemas/prompts";
 import { getScoringThresholds } from "@/lib/settings";
 
 // Re-export for backward compat with existing imports
 export const analysisSchema = AiStoreEvaluationSchema;
 export type StoreEvaluationAnalysis = AiStoreEvaluation;
+
+export type { AiStoreEvaluation };
+
+/** Context passed to the prompt builder for richer AI instructions */
+export interface AnalysisContext {
+  language?: "en" | "es";
+  store?: {
+    storeId?: string;
+    customerCode?: string;
+    name?: string;
+    city?: string;
+    zone?: string;
+  };
+  ourBrands?: string[];
+  competitorBrands?: string[];
+  photoTypes?: Array<"WIDE_SHOT" | "SHELF_CLOSEUP" | "OTHER">;
+}
 
 function parseModelJson(text: string): unknown {
   const trimmed = text.trim();
@@ -145,40 +163,17 @@ const AI_JSON_SCHEMA = {
   },
 };
 
-const SYSTEM_PROMPT = `You are a retail execution auditor for a consumer goods company.
-Evaluate store photos for product positioning superiority vs competitors.
-
-IMPORTANT: Set schemaVersion to "${AI_SCHEMA_VERSION}" in your response.
-
-Score using these weighted sub-scores (each 0–25, total 0–100):
-1. visibility (0–25): Are our products easy to spot? Front-facing, eye-level, signage present?
-2. shelfShare (0–25): What approximate shelf share does our brand have vs competitors?
-3. placement (0–25): Are products at eye-level, on end-caps, near checkout, in primary zones?
-4. availability (0–25): Are products present and well-stocked (impression, not exact count)?
-
-score MUST equal visibility + shelfShare + placement + availability.
-
-Set confidence 0–1 based on image quality/clarity. If blurry/dark/far, lower confidence.
-
-Use UPPERCASE enum values for type (VISIBILITY, SHELF_SHARE, PLACEMENT, AVAILABILITY, BRANDING, PRICING, OTHER), severity (LOW, MEDIUM, HIGH), and priority (P0, P1, P2).
-
-Provide:
-- summary: 2–4 sentences (min 15 chars)
-- whyBullets: 3–8 key observations
-- evidence: structured items with type, detail, severity, optional tags/segment/brands
-- recommendations: actionable steps with priority (P0=urgent, P1=important, P2=nice-to-have) and rationale
-- detected: brands and segments visible in photos
-
-For each photo, provide a photoAssessment with quality and piiRisk.
-
-Return strict JSON only.`;
-
 /**
  * Analyze one or more store photos using the AI vision model.
  * Supports multi-photo: passes all images in a single prompt.
+ *
+ * @param photoUrls   Public URLs or data-URLs for the photos
+ * @param context     Optional store/brand/language context for richer prompts
+ * @param thresholds  Optional scoring thresholds (loaded from settings if omitted)
  */
 export async function analyzeStorePhotos(
   photoUrls: string[],
+  context?: AnalysisContext,
   thresholds?: ScoringThresholds,
 ): Promise<AiStoreEvaluation> {
   if (!process.env.OPENAI_API_KEY) {
@@ -188,20 +183,26 @@ export async function analyzeStorePhotos(
   const resolvedThresholds = thresholds ?? (await getScoringThresholds());
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-  const photoCount = photoUrls.length;
+  // Build prompts from the structured prompt builder
+  const photoTypes = context?.photoTypes ?? photoUrls.map(() => "WIDE_SHOT" as const);
+  const { system, user: userPrompt } = buildStoreEvaluationPrompts({
+    language: context?.language,
+    store: context?.store,
+    ourBrands: context?.ourBrands,
+    competitorBrands: context?.competitorBrands,
+    photoTypesProvided: photoTypes,
+  });
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const userContent: any[] = [
-    {
-      type: "input_text",
-      text: `Evaluate ${photoCount === 1 ? "this" : `these ${photoCount}`} in-store photo${photoCount > 1 ? "s" : ""} for superiority execution. ${photoCount === 1 ? "Only one photo — note if additional angles would help." : "Multiple angles provided."} Return strict JSON with schemaVersion "${AI_SCHEMA_VERSION}".`,
-    },
+    { type: "input_text", text: userPrompt },
     ...photoUrls.map((url) => ({ type: "input_image", image_url: url, detail: "auto" })),
   ];
 
   const response = await openai.responses.create({
     model: process.env.OPENAI_MODEL_VISION ?? "gpt-4.1-mini",
     input: [
-      { role: "system", content: SYSTEM_PROMPT },
+      { role: "system", content: system },
       { role: "user", content: userContent },
     ],
     text: { format: AI_JSON_SCHEMA },
@@ -231,6 +232,9 @@ export async function analyzeStorePhotos(
 }
 
 /** Backward-compatible single-photo analysis */
-export async function analyzeStorePhoto(photoUrlOrDataUrl: string): Promise<AiStoreEvaluation> {
-  return analyzeStorePhotos([photoUrlOrDataUrl]);
+export async function analyzeStorePhoto(
+  photoUrlOrDataUrl: string,
+  context?: AnalysisContext,
+): Promise<AiStoreEvaluation> {
+  return analyzeStorePhotos([photoUrlOrDataUrl], context);
 }
