@@ -2,6 +2,7 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { requireManager } from "@/lib/security";
+import { jsonError, withRequestIdHeader } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
 import { logAudit } from "@/lib/audit";
 import { managerOverrideSchema } from "@/lib/schemas/evaluation";
@@ -16,7 +17,7 @@ export async function POST(
   const body = await req.json();
   const parsed = managerOverrideSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.message }, { status: 400 });
+    return jsonError(req, { code: "INVALID_PAYLOAD", message: parsed.error.message }, 400);
   }
 
   const evaluation = await prisma.evaluation.findUnique({
@@ -25,7 +26,7 @@ export async function POST(
   });
 
   if (!evaluation) {
-    return NextResponse.json({ error: "Evaluation not found" }, { status: 404 });
+    return jsonError(req, { code: "NOT_FOUND", message: "Evaluation not found" }, 404);
   }
 
   const updated = await prisma.evaluation.update({
@@ -51,5 +52,5 @@ export async function POST(
     },
   });
 
-  return NextResponse.json({ ok: true, id: updated.id });
+  return NextResponse.json({ ok: true, id: updated.id }, { headers: withRequestIdHeader(req) });
 }

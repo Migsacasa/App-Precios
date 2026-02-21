@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { jsonError, withRequestIdHeader } from "@/lib/api-response";
 import { requireManager, SecurityError } from "@/lib/security";
 
 type HeatPoint = {
@@ -59,11 +60,11 @@ export async function GET(req: Request) {
       };
     });
 
-    return NextResponse.json({ points });
+    return NextResponse.json({ points }, { headers: withRequestIdHeader(req) });
   } catch (error) {
     if (error instanceof SecurityError) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
+      return jsonError(req, { code: "SECURITY_ERROR", message: error.message }, error.status);
     }
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    return jsonError(req, { code: "INTERNAL_ERROR", message: "Internal Server Error" }, 500);
   }
 }

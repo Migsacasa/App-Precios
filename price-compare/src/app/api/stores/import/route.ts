@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { jsonError, withRequestIdHeader } from "@/lib/api-response";
 import { requireAdmin, SecurityError } from "@/lib/security";
 
 type CsvRow = {
@@ -91,7 +92,7 @@ export async function POST(req: Request) {
     const file = form.get("file") as File | null;
 
     if (!file || file.size <= 0) {
-      return NextResponse.json({ error: "CSV file is required" }, { status: 400 });
+      return jsonError(req, { code: "FILE_REQUIRED", message: "CSV file is required" }, 400);
     }
 
     const text = await file.text();
@@ -126,18 +127,21 @@ export async function POST(req: Request) {
       }
     }
 
-    return NextResponse.json({ ok: true, created, updated, total: rows.length });
+    return NextResponse.json(
+      { ok: true, created, updated, total: rows.length },
+      { headers: withRequestIdHeader(req) },
+    );
   } catch (error) {
     if (error instanceof SecurityError) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
+      return jsonError(req, { code: "SECURITY_ERROR", message: error.message }, error.status);
     }
 
     const message = error instanceof Error ? error.message : "Import failed";
-    return NextResponse.json({ error: message }, { status: 400 });
+    return jsonError(req, { code: "IMPORT_FAILED", message }, 400);
   }
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
     await requireAdmin();
 
@@ -148,15 +152,15 @@ export async function GET() {
     ].join("\n");
 
     return new Response(sample, {
-      headers: {
+      headers: withRequestIdHeader(req, {
         "Content-Type": "text/csv; charset=utf-8",
         "Content-Disposition": 'attachment; filename="stores_sample.csv"',
-      },
+      }),
     });
   } catch (error) {
     if (error instanceof SecurityError) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
+      return jsonError(req, { code: "SECURITY_ERROR", message: error.message }, error.status);
     }
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    return jsonError(req, { code: "INTERNAL_ERROR", message: "Internal Server Error" }, 500);
   }
 }

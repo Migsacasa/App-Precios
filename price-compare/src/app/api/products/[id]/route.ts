@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { jsonError, withRequestIdHeader } from "@/lib/api-response";
 import { requireAdmin, SecurityError } from "@/lib/security";
 
 const schema = z.object({
@@ -39,15 +40,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       },
     });
 
-    return NextResponse.json({ ok: true, product });
+    return NextResponse.json({ ok: true, product }, { headers: withRequestIdHeader(req) });
   } catch (error) {
     if (error instanceof SecurityError) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
+      return jsonError(req, { code: "SECURITY_ERROR", message: error.message }, error.status);
     }
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: "Invalid payload", details: error.flatten() }, { status: 400 });
+      return jsonError(req, { code: "INVALID_PAYLOAD", message: "Invalid payload", details: error.flatten() }, 400);
     }
     const message = error instanceof Error ? error.message : "Internal Server Error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return jsonError(req, { code: "INTERNAL_ERROR", message }, 500);
   }
 }

@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { requireAdmin, SecurityError } from "@/lib/security";
+import { jsonError, withRequestIdHeader } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
 import { logAudit } from "@/lib/audit";
 import { getRetentionMonths } from "@/lib/settings";
 
-export async function POST() {
+export async function POST(req: Request) {
   try {
     const session = await requireAdmin();
 
@@ -48,18 +49,21 @@ export async function POST() {
       },
     });
 
-    return NextResponse.json({
-      ok: true,
-      retentionMonths,
-      cutoff: cutoff.toISOString(),
-      deletedEvaluations,
-      deletedAuditLogs: deletedAudit.count,
-    });
+    return NextResponse.json(
+      {
+        ok: true,
+        retentionMonths,
+        cutoff: cutoff.toISOString(),
+        deletedEvaluations,
+        deletedAuditLogs: deletedAudit.count,
+      },
+      { headers: withRequestIdHeader(req) },
+    );
   } catch (e) {
     if (e instanceof SecurityError) {
-      return NextResponse.json({ error: e.message }, { status: e.status });
+      return jsonError(req, { code: "SECURITY_ERROR", message: e.message }, e.status);
     }
     console.error("Retention cleanup error:", e);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    return jsonError(req, { code: "INTERNAL_ERROR", message: "Internal Server Error" }, 500);
   }
 }

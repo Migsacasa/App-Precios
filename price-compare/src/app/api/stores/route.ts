@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { jsonError, withRequestIdHeader } from "@/lib/api-response";
 import { requireAdmin, requireRole, SecurityError } from "@/lib/security";
 
 const schema = z.object({
@@ -14,7 +15,7 @@ const schema = z.object({
   chain: z.string().optional(),
 });
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
     await requireRole("FIELD");
 
@@ -34,12 +35,12 @@ export async function GET() {
       },
     });
 
-    return NextResponse.json({ stores });
+    return NextResponse.json({ stores }, { headers: withRequestIdHeader(req) });
   } catch (error) {
     if (error instanceof SecurityError) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
+      return jsonError(req, { code: "SECURITY_ERROR", message: error.message }, error.status);
     }
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    return jsonError(req, { code: "INTERNAL_ERROR", message: "Internal Server Error" }, 500);
   }
 }
 
@@ -63,15 +64,15 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    return NextResponse.json({ ok: true, store });
+    return NextResponse.json({ ok: true, store }, { headers: withRequestIdHeader(req) });
   } catch (error) {
     if (error instanceof SecurityError) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
+      return jsonError(req, { code: "SECURITY_ERROR", message: error.message }, error.status);
     }
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: "Invalid payload", details: error.flatten() }, { status: 400 });
+      return jsonError(req, { code: "INVALID_PAYLOAD", message: "Invalid payload", details: error.flatten() }, 400);
     }
     const message = error instanceof Error ? error.message : "Internal Server Error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return jsonError(req, { code: "INTERNAL_ERROR", message }, 500);
   }
 }

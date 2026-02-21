@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin, SecurityError } from "@/lib/security";
+import { jsonError, withRequestIdHeader } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(req: NextRequest) {
@@ -29,17 +30,20 @@ export async function GET(req: NextRequest) {
       prisma.auditLog.count({ where }),
     ]);
 
-    return NextResponse.json({
-      data: rows,
-      page,
-      limit,
-      total,
-      totalPages: Math.ceil(total / limit),
-    });
+    return NextResponse.json(
+      {
+        data: rows,
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+      { headers: withRequestIdHeader(req) },
+    );
   } catch (e) {
     if (e instanceof SecurityError) {
-      return NextResponse.json({ error: e.message }, { status: e.status });
+      return jsonError(req, { code: "SECURITY_ERROR", message: e.message }, e.status);
     }
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    return jsonError(req, { code: "INTERNAL_ERROR", message: "Internal Server Error" }, 500);
   }
 }

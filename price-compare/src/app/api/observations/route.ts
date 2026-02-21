@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { z } from "zod";
 import { authOptions } from "@/lib/auth";
+import { jsonError, withRequestIdHeader } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
 import { saveUpload, UploadValidationError } from "@/lib/upload";
 import { analyzeStorePhotos, analysisSchema } from "@/lib/store-evaluation-ai";
@@ -94,10 +95,10 @@ function assertSlots(slots: Array<{ segment: "LUBRICANTS" | "BATTERIES" | "TIRES
   }
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return jsonError(req, { code: "UNAUTHORIZED", message: "Unauthorized" }, 401);
   }
 
   const [stores, products] = await Promise.all([
@@ -120,14 +121,14 @@ export async function GET() {
     }),
   ]);
 
-  return NextResponse.json({ stores, products });
+  return NextResponse.json({ stores, products }, { headers: withRequestIdHeader(req) });
 }
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   const userId = session?.user?.id;
   if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return jsonError(req, { code: "UNAUTHORIZED", message: "Unauthorized" }, 401);
   }
 
   const role = (session.user as { role?: string }).role ?? "FIELD";
@@ -141,7 +142,7 @@ export async function POST(req: NextRequest) {
   const slots = buildSlotsFromForm(form);
 
   if (!storeId) {
-    return NextResponse.json({ error: "Store is required" }, { status: 400 });
+    return jsonError(req, { code: "STORE_REQUIRED", message: "Store is required" }, 400);
   }
 
   // Dedup: if clientEvaluationId exists, check for duplicate
@@ -151,7 +152,10 @@ export async function POST(req: NextRequest) {
       select: { id: true },
     });
     if (existing) {
-      return NextResponse.json({ ok: true, id: existing.id, duplicate: true });
+      return NextResponse.json(
+        { ok: true, id: existing.id, duplicate: true },
+        { headers: withRequestIdHeader(req) },
+      );
     }
   }
 
@@ -159,7 +163,7 @@ export async function POST(req: NextRequest) {
     assertSlots(slots);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Invalid segment slots";
-    return NextResponse.json({ error: message }, { status: 400 });
+    return jsonError(req, { code: "INVALID_SEGMENT_SLOTS", message }, 400);
   }
 
   // Handle multi-photo: photo, photo_1, photo_2 (up to 3)
@@ -193,10 +197,10 @@ export async function POST(req: NextRequest) {
       });
     } catch (e) {
       if (e instanceof UploadValidationError) {
-        return NextResponse.json({ error: e.message }, { status: 400 });
+        return jsonError(req, { code: "UPLOAD_VALIDATION_ERROR", message: e.message }, 400);
       }
       console.error("Upload failed:", e);
-      return NextResponse.json({ error: "File upload failed" }, { status: 500 });
+      return jsonError(req, { code: "UPLOAD_FAILED", message: "File upload failed" }, 500);
     }
   }
 
@@ -294,7 +298,7 @@ export async function POST(req: NextRequest) {
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Validation failed";
-    return NextResponse.json({ error: message }, { status: 400 });
+    return jsonError(req, { code: "VALIDATION_FAILED", message }, 400);
   }
 
   try {
@@ -380,9 +384,9 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    return NextResponse.json({ ok: true, id: evaluation.id });
+    return NextResponse.json({ ok: true, id: evaluation.id }, { headers: withRequestIdHeader(req) });
   } catch (e) {
     console.error("Failed to create evaluation:", e);
-    return NextResponse.json({ error: "Failed to save evaluation" }, { status: 500 });
+    return jsonError(req, { code: "SAVE_FAILED", message: "Failed to save evaluation" }, 500);
   }
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin, SecurityError } from "@/lib/security";
+import { jsonError, withRequestIdHeader } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
 import { logAudit } from "@/lib/audit";
 import { z } from "zod";
@@ -20,7 +21,7 @@ export async function POST(req: NextRequest) {
     const file = formData.get("file");
 
     if (!file || !(file instanceof File)) {
-      return NextResponse.json({ error: "CSV file required" }, { status: 400 });
+      return jsonError(req, { code: "FILE_REQUIRED", message: "CSV file required" }, 400);
     }
 
     const text = await file.text();
@@ -30,7 +31,7 @@ export async function POST(req: NextRequest) {
       .filter((l) => l.length > 0);
 
     if (lines.length < 2) {
-      return NextResponse.json({ error: "CSV must have header + at least 1 row" }, { status: 400 });
+      return jsonError(req, { code: "INVALID_CSV", message: "CSV must have header + at least 1 row" }, 400);
     }
 
     // Parse header
@@ -41,7 +42,7 @@ export async function POST(req: NextRequest) {
     const priceIdx = header.findIndex((h) => h === "ourprice" || h === "our_price" || h === "price");
 
     if (nameIdx < 0) {
-      return NextResponse.json({ error: "CSV must have a 'name' column" }, { status: 400 });
+      return jsonError(req, { code: "INVALID_CSV", message: "CSV must have a 'name' column" }, 400);
     }
 
     const results = { created: 0, updated: 0, errors: [] as string[] };
@@ -128,12 +129,12 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    return NextResponse.json(results);
+    return NextResponse.json(results, { headers: withRequestIdHeader(req) });
   } catch (e) {
     if (e instanceof SecurityError) {
-      return NextResponse.json({ error: e.message }, { status: e.status });
+      return jsonError(req, { code: "SECURITY_ERROR", message: e.message }, e.status);
     }
     console.error("Product CSV import error:", e);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    return jsonError(req, { code: "INTERNAL_ERROR", message: "Internal Server Error" }, 500);
   }
 }
