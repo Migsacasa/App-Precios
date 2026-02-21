@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { apiFetchJson, formatApiError } from "@/lib/api-client";
 
 const RATING_OPTIONS = ["GOOD", "REGULAR", "BAD"] as const;
 
@@ -39,18 +40,15 @@ export function ManagerOverrideForm({
     }
     setSubmitting(true);
     try {
-      const res = await fetch(`/api/evaluations/${evaluationId}/override`, {
+      await apiFetchJson<{ ok: true; id: string }>(`/api/evaluations/${evaluationId}/override`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ newRating, reason: reason.trim() }),
       });
-      if (!res.ok) {
-        throw new Error(await res.text());
-      }
       toast.success("Override applied");
       router.refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Override failed");
+      toast.error(formatApiError(err, "Override failed"));
     } finally {
       setSubmitting(false);
     }

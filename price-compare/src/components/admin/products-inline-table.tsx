@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
+import { apiFetchJson, formatApiError } from "@/lib/api-client";
 
 type ProductRow = {
   id: string;
@@ -20,7 +21,7 @@ export function ProductsInlineTable({ initialRows }: { initialRows: ProductRow[]
   async function saveRow(row: ProductRow) {
     setSavingId(row.id);
     try {
-      const res = await fetch(`/api/products/${row.id}`, {
+      await apiFetchJson<{ ok: true }>(`/api/products/${row.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -33,14 +34,9 @@ export function ProductsInlineTable({ initialRows }: { initialRows: ProductRow[]
         }),
       });
 
-      if (!res.ok) {
-        throw new Error(await res.text());
-      }
-
       toast.success(`Updated ${row.name}`);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to update";
-      toast.error(message);
+      toast.error(formatApiError(error, "Failed to update"));
     } finally {
       setSavingId(null);
     }

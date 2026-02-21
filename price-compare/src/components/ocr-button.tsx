@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { apiFetchJson } from "@/lib/api-client";
 import { parsePriceFromText } from "@/lib/ocr";
 
 export function OcrButton({
@@ -22,23 +23,16 @@ export function OcrButton({
       const fd = new FormData();
       fd.append("photo", file);
 
-      const res = await fetch("/api/ocr", { method: "POST", body: fd });
-      if (res.ok) {
-        const contentType = res.headers.get("content-type") ?? "";
-        if (!contentType.toLowerCase().includes("application/json")) {
-          throw new Error("OCR endpoint did not return JSON");
-        }
-        const json = await res.json();
-        const ocrText = String(json.text || "");
-        const price = parsePriceFromText(ocrText);
-        if (price != null) {
-          onDetected(price, ocrText, "OCR");
-          setStatus("idle");
-          setMsg("OCR detected a price.");
-          return;
-        }
-        setMsg("OCR ran but couldn’t confidently detect a price. Try manual edit.");
+      const json = await apiFetchJson<{ text: string }>("/api/ocr", { method: "POST", body: fd });
+      const ocrText = String(json.text || "");
+      const price = parsePriceFromText(ocrText);
+      if (price != null) {
+        onDetected(price, ocrText, "OCR");
+        setStatus("idle");
+        setMsg("OCR detected a price.");
+        return;
       }
+      setMsg("OCR ran but couldn’t confidently detect a price. Try manual edit.");
     } catch {
       setMsg("Server OCR unavailable. Falling back to client OCR.");
     }

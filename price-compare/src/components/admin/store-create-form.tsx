@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
+import { apiFetchJson, formatApiError } from "@/lib/api-client";
 
 export function StoreCreateForm() {
   const [customerCode, setCustomerCode] = useState("");
@@ -16,7 +17,7 @@ export function StoreCreateForm() {
   async function onCreate() {
     setSaving(true);
     try {
-      const response = await fetch("/api/stores", {
+      await apiFetchJson<{ ok: true }>("/api/stores", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -30,15 +31,10 @@ export function StoreCreateForm() {
         }),
       });
 
-      if (!response.ok) {
-        throw new Error(await response.text());
-      }
-
       toast.success("Store created");
       window.location.reload();
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Create failed";
-      toast.error(message);
+      toast.error(formatApiError(error, "Create failed"));
     } finally {
       setSaving(false);
     }

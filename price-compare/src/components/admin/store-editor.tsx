@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import { apiFetchJson, formatApiError } from "@/lib/api-client";
 
 const StoreMapPicker = dynamic(
   () => import("@/components/admin/store-map-picker").then((m) => m.StoreMapPicker),
@@ -51,7 +52,7 @@ export function StoreEditor({ stores }: { stores: StoreOption[] }) {
 
     setSaving(true);
     try {
-      const res = await fetch(`/api/stores/${form.id}`, {
+      await apiFetchJson<{ ok: true }>(`/api/stores/${form.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -67,14 +68,9 @@ export function StoreEditor({ stores }: { stores: StoreOption[] }) {
         }),
       });
 
-      if (!res.ok) {
-        throw new Error(await res.text());
-      }
-
       toast.success("Store updated");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to update store";
-      toast.error(message);
+      toast.error(formatApiError(error, "Failed to update store"));
     } finally {
       setSaving(false);
     }

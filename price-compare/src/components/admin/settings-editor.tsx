@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
+import { apiFetchJson, formatApiError } from "@/lib/api-client";
 
 const SETTING_GROUPS = [
   {
@@ -43,16 +44,15 @@ export function SettingsEditor({ initialSettings }: { initialSettings: Record<st
   async function saveSetting(key: string, value: string) {
     setSaving(key);
     try {
-      const res = await fetch("/api/admin/settings", {
+      await apiFetchJson<{ ok: true }>("/api/admin/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ key, value }),
       });
-      if (!res.ok) throw new Error(await res.text());
       setSettings((prev) => ({ ...prev, [key]: value }));
       toast.success(`Updated ${key}`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to save");
+      toast.error(formatApiError(err, "Failed to save"));
     } finally {
       setSaving(null);
     }
@@ -111,13 +111,11 @@ function RetentionCleanup() {
     if (!confirm("This will permanently delete old data. Continue?")) return;
     setRunning(true);
     try {
-      const res = await fetch("/api/admin/retention", { method: "POST" });
-      if (!res.ok) throw new Error(await res.text());
-      const data = await res.json();
+      const data = await apiFetchJson<Record<string, unknown>>("/api/admin/retention", { method: "POST" });
       setResult(data);
       toast.success("Retention cleanup complete");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Cleanup failed");
+      toast.error(formatApiError(err, "Cleanup failed"));
     } finally {
       setRunning(false);
     }

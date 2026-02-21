@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { apiFetchJson, formatApiError } from "@/lib/api-client";
 import { countPending, enqueueObservation, syncPending } from "@/lib/offline-db";
 import { checkImageQuality, compressImage, type ImageQualityReport } from "@/lib/image-quality";
 import { toast } from "sonner";
@@ -248,17 +249,14 @@ export function NewObservationForm({
         formData.append(idx === 0 ? "photoType" : `photoType_${idx}`, p.type);
       });
 
-      const response = await fetch("/api/evaluations/analyze", { method: "POST", body: formData });
-      if (!response.ok) {
-        throw new Error(await response.text());
-      }
-
-      const data = await response.json();
+      const data = await apiFetchJson<{ photoUrl: string; analysis: Analysis }>("/api/evaluations/analyze", {
+        method: "POST",
+        body: formData,
+      });
       setAnalysis(data.analysis);
       toast.success("AI review complete");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "AI analysis failed";
-      toast.error(message);
+      toast.error(formatApiError(error, "AI analysis failed"));
     } finally {
       setAnalyzing(false);
     }
@@ -351,16 +349,12 @@ export function NewObservationForm({
 
     setSaving(true);
     try {
-      const response = await fetch("/api/evaluations", { method: "POST", body: formData });
-      if (!response.ok) {
-        throw new Error(await response.text());
-      }
+      await apiFetchJson<{ ok: true; id: string }>("/api/evaluations", { method: "POST", body: formData });
 
       toast.success("Evaluation saved");
       router.push("/observations");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Save failed";
-      toast.error(message);
+      toast.error(formatApiError(error, "Save failed"));
     } finally {
       setSaving(false);
     }

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
+import { apiFetchJson, formatApiError } from "@/lib/api-client";
 
 export function StoreCsvImport() {
   const [file, setFile] = useState<File | null>(null);
@@ -18,17 +19,14 @@ export function StoreCsvImport() {
       const form = new FormData();
       form.append("file", file);
 
-      const response = await fetch("/api/stores/import", { method: "POST", body: form });
-      if (!response.ok) {
-        throw new Error(await response.text());
-      }
-
-      const data = (await response.json()) as { created: number; updated: number; total: number };
+      const data = await apiFetchJson<{ created: number; updated: number; total: number }>("/api/stores/import", {
+        method: "POST",
+        body: form,
+      });
       toast.success(`Imported ${data.total} stores (${data.created} created / ${data.updated} updated)`);
       window.location.reload();
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Import failed";
-      toast.error(message);
+      toast.error(formatApiError(error, "Import failed"));
     } finally {
       setUploading(false);
     }

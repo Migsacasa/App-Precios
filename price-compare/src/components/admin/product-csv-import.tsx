@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { apiFetchJson, formatApiError } from "@/lib/api-client";
 
 export function ProductCsvImport() {
   const router = useRouter();
@@ -21,14 +22,15 @@ export function ProductCsvImport() {
     try {
       const fd = new FormData();
       fd.append("file", file);
-      const res = await fetch("/api/admin/products/import", { method: "POST", body: fd });
-      if (!res.ok) throw new Error(await res.text());
-      const data = await res.json();
+      const data = await apiFetchJson<{ created: number; updated: number; errors: string[] }>("/api/admin/products/import", {
+        method: "POST",
+        body: fd,
+      });
       setResult(data);
       toast.success(`Imported: ${data.created} created, ${data.updated} updated`);
       router.refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Import failed");
+      toast.error(formatApiError(err, "Import failed"));
     } finally {
       setUploading(false);
     }
