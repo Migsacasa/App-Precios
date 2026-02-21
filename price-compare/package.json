@@ -29,7 +29,6 @@
     "next": "16.1.6",
     "next-auth": "^4.24.13",
     "next-pwa": "^5.6.0",
-    "next-themes": "^0.4.6",
     "openai": "^6.22.0",
     "pdfkit": "^0.17.2",
     "pg": "^8.18.0",
@@ -56,5 +55,13 @@
     "tailwindcss": "^4",
     "tsx": "^4.0.0",
     "typescript": "^5"
+  },
+  "overrides": {
+    "lodash": "^4.17.23",
+    "minimatch": "^10.2.2",
+    "hono": "^4.12.1",
+    "workbox-build": "^7.4.0",
+    "workbox-webpack-plugin": "^7.4.0",
+    "ejs": "^3.1.10"
   }
 }

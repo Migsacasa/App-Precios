@@ -11,6 +11,7 @@ type PromptParams = {
   };
   ourBrands?: string[]; // optional: known brand names
   competitorBrands?: string[]; // optional
+  referenceProducts?: Array<{ name: string; brand?: string; imageUrl: string; note?: string }>;
   photoTypesProvided: Array<"WIDE_SHOT" | "SHELF_CLOSEUP" | "OTHER">; // align with uploaded photos
 };
 
@@ -68,6 +69,12 @@ Context (may be partial):
 - Store: ${JSON.stringify(params.store ?? {}, null, 0)}
 - Our brands (if provided): ${JSON.stringify(params.ourBrands ?? [], null, 0)}
 - Competitor brands (if provided): ${JSON.stringify(params.competitorBrands ?? [], null, 0)}
+- Reference products with images (if provided): ${JSON.stringify((params.referenceProducts ?? []).map((p) => ({
+  name: p.name,
+  brand: p.brand ?? null,
+  note: p.note ?? null,
+  imageUrl: p.imageUrl,
+})), null, 0)}
 - Photo types provided (in order): ${JSON.stringify(params.photoTypesProvided, null, 0)}
 
 Segments of interest:
@@ -77,8 +84,9 @@ Segments of interest:
 
 TASK:
 1) Assess photo quality per photoType (OK/BLURRY/DARK/TOO_FAR/LOW_RES/OBSTRUCTED/OTHER_ISSUE).
-2) Determine if our brands/products are visible and how they compare to competitor visibility and shelf share.
-3) Produce the final JSON strictly following the schema:
+2) If reference product images are provided, compare shelf/store photos against those references to identify our products more reliably.
+3) Determine if our brands/products are visible and how they compare to competitor visibility and shelf share.
+4) Produce the final JSON strictly following the schema:
 {
   "schemaVersion": "${AI_SCHEMA_VERSION}",
   "rating": "GOOD|REGULAR|BAD|NEEDS_REVIEW",

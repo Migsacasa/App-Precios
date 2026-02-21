@@ -27,6 +27,7 @@ export interface AnalysisContext {
   };
   ourBrands?: string[];
   competitorBrands?: string[];
+  referenceProducts?: Array<{ name: string; brand?: string; imageUrl: string; note?: string }>;
   photoTypes?: Array<"WIDE_SHOT" | "SHELF_CLOSEUP" | "OTHER">;
 }
 
@@ -64,7 +65,7 @@ function parseModelJson(text: string): unknown {
 const AI_JSON_SCHEMA = {
   type: "json_schema" as const,
   name: "store_superiority_evaluation_v1",
-  strict: true,
+  strict: false,
   schema: {
     type: "object",
     additionalProperties: false,
@@ -190,14 +191,33 @@ export async function analyzeStorePhotos(
     store: context?.store,
     ourBrands: context?.ourBrands,
     competitorBrands: context?.competitorBrands,
+    referenceProducts: context?.referenceProducts,
     photoTypesProvided: photoTypes,
   });
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const userContent: any[] = [
+  type UserInputContent =
+    | { type: "input_text"; text: string }
+    | { type: "input_image"; image_url: string; detail: "auto" };
+
+  const userContent: UserInputContent[] = [
     { type: "input_text", text: userPrompt },
-    ...photoUrls.map((url) => ({ type: "input_image", image_url: url, detail: "auto" })),
   ];
+
+  if (context?.referenceProducts?.length) {
+    userContent.push({ type: "input_text", text: "Reference product images (our products):" });
+    for (const ref of context.referenceProducts.slice(0, 20)) {
+      userContent.push({
+        type: "input_text",
+        text: `Reference: ${ref.name}${ref.brand ? ` · brand: ${ref.brand}` : ""}${ref.note ? ` · note: ${ref.note}` : ""}`,
+      });
+      userContent.push({ type: "input_image", image_url: ref.imageUrl, detail: "auto" });
+    }
+  }
+
+  userContent.push({ type: "input_text", text: "Store capture images to evaluate:" });
+  userContent.push(
+    ...photoUrls.map<UserInputContent>((url) => ({ type: "input_image", image_url: url, detail: "auto" })),
+  );
 
   const response = await openai.responses.create({
     model: process.env.OPENAI_MODEL_VISION ?? "gpt-4.1-mini",

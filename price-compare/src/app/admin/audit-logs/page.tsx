@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
+import { AuditAction } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Pagination } from "@/components/pagination";
@@ -18,8 +19,11 @@ export default async function AdminAuditLogsPage({
   const params = await searchParams;
   const currentPage = Math.max(1, parseInt(params?.page ?? "1", 10) || 1);
   const actionFilter = params?.event ?? undefined;
+  const normalizedAction = actionFilter && Object.values(AuditAction).includes(actionFilter as AuditAction)
+    ? (actionFilter as AuditAction)
+    : undefined;
 
-  const where = actionFilter ? { action: actionFilter as any } : {};
+  const where = normalizedAction ? { action: normalizedAction } : {};
 
   const [logs, totalCount] = await Promise.all([
     prisma.auditLog.findMany({
@@ -79,11 +83,23 @@ export default async function AdminAuditLogsPage({
           <tbody>
             {logs.map((log) => {
               const meta = log.meta as Record<string, unknown> | null;
+              const isSelfRegistration =
+                log.entityType === "User" &&
+                log.action === "STORE_CREATED" &&
+                meta?.source === "self-registration";
+
               return (
                 <tr key={log.id} className="border-t align-top">
                   <td className="p-2 whitespace-nowrap">{log.createdAt.toISOString().replace("T", " ").slice(0, 19)}</td>
                   <td className="p-2">
-                    <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-muted">{log.action}</span>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-muted">{log.action}</span>
+                      {isSelfRegistration && (
+                        <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600">
+                          Self-registration
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="p-2">{log.actor?.name ?? log.actor?.email ?? log.actorId ?? "System"}</td>
                   <td className="p-2 max-w-md">

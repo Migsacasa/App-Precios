@@ -7,9 +7,9 @@ import { authOptions } from "@/lib/auth";
 import { jsonError, withRequestIdHeader } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
 import { saveUpload, UploadValidationError } from "@/lib/upload";
-import { analyzeStorePhotos, analysisSchema } from "@/lib/store-evaluation-ai";
+import { analyzeStorePhotos } from "@/lib/store-evaluation-ai";
 import { logAudit } from "@/lib/audit";
-import { AiStoreEvaluationSchema, AI_SCHEMA_VERSION, assignRating } from "@/lib/schemas/evaluation";
+import { AiStoreEvaluationSchema, AI_SCHEMA_VERSION } from "@/lib/schemas/evaluation";
 import type { Prisma, PhotoType } from "@prisma/client";
 
 const slotSchema = z.object({
@@ -39,7 +39,8 @@ const requiredSlots: Record<"LUBRICANTS" | "BATTERIES" | "TIRES", number[]> = {
 
 function parseNumber(value: FormDataEntryValue | null) {
   if (value == null || value === "") return undefined;
-  const n = Number(value);
+  const normalized = String(value).trim().replace(",", ".");
+  const n = Number(normalized);
   return Number.isFinite(n) ? n : undefined;
 }
 
@@ -81,18 +82,6 @@ function buildSlotsFromForm(form: FormData) {
     competitorPrice?: number;
     ourPrice?: number;
   }>;
-}
-
-function assertSlots(slots: Array<{ segment: "LUBRICANTS" | "BATTERIES" | "TIRES"; slot: number; priceIndex: number }>) {
-  for (const [segment, required] of Object.entries(requiredSlots) as Array<[
-    "LUBRICANTS" | "BATTERIES" | "TIRES",
-    number[],
-  ]>) {
-    const present = slots.filter((item) => item.segment === segment).map((item) => item.slot).sort((a, b) => a - b);
-    if (present.length !== required.length || present.some((value, index) => value !== required[index])) {
-      throw new Error(`Missing required inputs for ${segment}`);
-    }
-  }
 }
 
 export async function GET(req: Request) {
@@ -159,11 +148,12 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  try {
-    assertSlots(slots);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Invalid segment slots";
-    return jsonError(req, { code: "INVALID_SEGMENT_SLOTS", message }, 400);
+  if (slots.length === 0) {
+    console.warn("Evaluation submitted without segment slots", {
+      requestId: req.headers.get("x-request-id") ?? null,
+      storeId,
+      userId,
+    });
   }
 
   // Handle multi-photo: photo, photo_1, photo_2 (up to 3)
@@ -235,10 +225,41 @@ export async function POST(req: NextRequest) {
   // Server-side AI if no client AI and photos exist
   if (!aiOutputJson && uploadedPhotos.length > 0) {
     try {
-      const storeData = await prisma.store.findUnique({
-        where: { id: storeId },
-        select: { id: true, customerCode: true, name: true, city: true, zone: true },
+      const [storeData, referenceProducts] = await Promise.all([
+        prisma.store.findUnique({
+          where: { id: storeId },
+          select: { id: true, customerCode: true, name: true, city: true, zone: true },
+        }),
+        prisma.product.findMany({
+          where: {
+            active: true,
+            referencePhotos: { some: {} },
+          },
+          orderBy: { updatedAt: "desc" },
+          take: 30,
+          select: {
+            name: true,
+            brand: true,
+            referencePhotos: {
+              orderBy: { createdAt: "desc" },
+              take: 1,
+              select: { url: true, note: true },
+            },
+          },
+        }),
+      ]);
+
+      const refs = referenceProducts.flatMap((product) => {
+        const photo = product.referencePhotos[0];
+        if (!photo?.url) return [];
+        return [{
+          name: product.name,
+          brand: product.brand ?? undefined,
+          imageUrl: photo.url,
+          note: photo.note ?? undefined,
+        }];
       });
+
       const analysis = await analyzeStorePhotos(
         uploadedPhotos.map((p) => p.url),
         {
@@ -249,6 +270,8 @@ export async function POST(req: NextRequest) {
             city: storeData.city ?? undefined,
             zone: storeData.zone ?? undefined,
           } : undefined,
+          ourBrands: Array.from(new Set(refs.map((item) => item.brand).filter((x): x is string => !!x))),
+          referenceProducts: refs,
           photoTypes: uploadedPhotos.map((p) => p.photoType as "WIDE_SHOT" | "SHELF_CLOSEUP" | "OTHER"),
         },
       );
@@ -271,7 +294,11 @@ export async function POST(req: NextRequest) {
         rating: "NEEDS_REVIEW", score: 0, confidence: 0,
         subScores: { visibility: 0, shelfShare: 0, placement: 0, availability: 0 },
         summary: "Photo captured. AI analysis unavailable at save time.",
-        whyBullets: ["AI analysis was not available during upload"],
+        whyBullets: [
+          "AI analysis was not available during upload",
+          "Captured data was saved without automated scoring context",
+          "A manager review is recommended before acting on this evaluation",
+        ],
         evidence: [{ type: "OTHER", detail: "Fallback response used", severity: "HIGH" }],
         recommendations: [{ priority: "P0", action: "Review photo later — no real-time AI response", rationale: "Ensure quality feedback" }],
       } as unknown as Prisma.InputJsonValue;

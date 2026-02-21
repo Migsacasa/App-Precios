@@ -11,7 +11,6 @@ import {
   Store,
   LayoutDashboard,
   Boxes,
-  Menu,
   X,
   LogOut,
   User,
@@ -113,7 +112,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen md:grid md:grid-cols-[220px_1fr]">
       {/* Desktop sidebar */}
-      <aside className="hidden md:flex md:flex-col border-r border-foreground/10 p-3 gap-2 justify-between">
+      <aside className="hidden md:flex md:flex-col border-r border-foreground/10 bg-muted/65 p-3 gap-2 justify-between">
         <div>
           <div className="px-2 py-3 text-sm font-semibold opacity-90">Retail Evaluator</div>
           <NavLinks pathname={pathname} />
@@ -130,7 +129,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       )}
       <nav
         className={cn(
-          "fixed inset-y-0 left-0 z-50 w-64 bg-background border-r border-foreground/10 p-3 flex flex-col gap-2 transform transition-transform md:hidden",
+          "fixed inset-y-0 left-0 z-50 w-64 bg-muted border-r border-foreground/10 p-3 flex flex-col gap-2 transform transition-transform md:hidden",
           mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >

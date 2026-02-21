@@ -72,7 +72,7 @@ export default async function ObservationsPage({
 
       <div className="overflow-x-auto border rounded">
         {error && (
-          <div className="p-4 text-sm text-red-600 bg-red-50 dark:bg-red-900/20 rounded">
+          <div className="p-4 text-sm text-red-600 bg-red-50 rounded">
             {error}
           </div>
         )}

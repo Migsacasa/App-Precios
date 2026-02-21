@@ -126,7 +126,7 @@ function RetentionCleanup() {
       <button
         onClick={runCleanup}
         disabled={running}
-        className="border border-red-300 text-red-700 dark:text-red-400 rounded px-4 py-2 text-sm hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50 transition-colors"
+        className="border border-red-300 text-red-700 rounded px-4 py-2 text-sm hover:bg-red-50 disabled:opacity-50 transition-colors"
       >
         {running ? "Running cleanup..." : "Run retention cleanup"}
       </button>

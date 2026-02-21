@@ -42,6 +42,11 @@ export default async function AdminProductsPage() {
   if (session.user.role !== "ADMIN") redirect("/observations");
 
   const products = await prisma.product.findMany({
+    include: {
+      referencePhotos: {
+        orderBy: { createdAt: "desc" },
+      },
+    },
     orderBy: [{ segment: "asc" }, { name: "asc" }],
   });
 
@@ -89,6 +94,11 @@ export default async function AdminProductsPage() {
           brand: product.brand ?? "",
           category: product.category ?? "",
           active: product.active,
+          referencePhotos: product.referencePhotos.map((photo) => ({
+            id: photo.id,
+            url: photo.url,
+            note: photo.note ?? "",
+          })),
         }))}
       />
     </div>

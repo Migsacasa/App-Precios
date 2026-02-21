@@ -1,9 +1,9 @@
 /* prisma/seed.ts */
 import { PrismaClient, Role, Segment } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import bcrypt from "bcryptjs";
 import fs from "node:fs";
 import path from "node:path";
-import crypto from "node:crypto";
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL! }),
@@ -80,7 +80,7 @@ function parseCsv(text: string): string[][] {
   return rows;
 }
 
-function csvToObjects<T extends Record<string, any>>(csvPath: string): T[] {
+function csvToObjects<T extends Record<string, unknown>>(csvPath: string): T[] {
   const text = fs.readFileSync(csvPath, "utf8");
   const rows = parseCsv(text);
   if (rows.length < 2) return [];
@@ -92,23 +92,21 @@ function csvToObjects<T extends Record<string, any>>(csvPath: string): T[] {
   });
 }
 
-function hashPassword(password: string): string {
-  // Built-in scrypt (no dependency)
-  const salt = crypto.randomBytes(16);
-  const key = crypto.scryptSync(password, salt, 32);
-  return `scrypt$${salt.toString("hex")}$${key.toString("hex")}`;
-}
-
 async function upsertUser(email: string, name: string, role: Role, password?: string) {
+  const passwordHash = password ? await bcrypt.hash(password, 10) : undefined;
+
   return prisma.user.upsert({
     where: { email },
-    update: { name, role },
+    update: {
+      name,
+      role,
+      ...(passwordHash ? { passwordHash } : {}),
+    },
     create: {
       email,
       name,
       role,
-      // If your User model has a passwordHash field, set it here.
-      // passwordHash: password ? hashPassword(password) : null,
+      passwordHash: passwordHash ?? null,
     },
   });
 }
@@ -277,10 +275,13 @@ async function main() {
   const adminEmail = process.env.SEED_ADMIN_EMAIL ?? "admin@example.com";
   const managerEmail = process.env.SEED_MANAGER_EMAIL ?? "manager@example.com";
   const fieldEmail = process.env.SEED_FIELD_EMAIL ?? "field@example.com";
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? "Admin123!";
+  const managerPassword = process.env.SEED_MANAGER_PASSWORD ?? "Manager123!";
+  const fieldPassword = process.env.SEED_FIELD_PASSWORD ?? "Field123!";
 
-  const admin = await upsertUser(adminEmail, "Admin", Role.ADMIN);
-  const manager = await upsertUser(managerEmail, "Manager", Role.MANAGER);
-  const field = await upsertUser(fieldEmail, "Field Rep", Role.FIELD);
+  const admin = await upsertUser(adminEmail, "Admin", Role.ADMIN, adminPassword);
+  const manager = await upsertUser(managerEmail, "Manager", Role.MANAGER, managerPassword);
+  const field = await upsertUser(fieldEmail, "Field Rep", Role.FIELD, fieldPassword);
 
   await prisma.auditLog.createMany({
     data: [
@@ -304,6 +305,9 @@ async function main() {
   }
 
   console.log("Seed completed.");
+  console.log(`Admin: ${adminEmail} / ${adminPassword}`);
+  console.log(`Manager: ${managerEmail} / ${managerPassword}`);
+  console.log(`Field: ${fieldEmail} / ${fieldPassword}`);
 }
 
 main()

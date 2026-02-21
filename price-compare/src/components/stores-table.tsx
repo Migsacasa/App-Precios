@@ -39,6 +39,7 @@ export function StoresTable({ data }: { data: StoreRow[] }) {
     []
   );
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data,
     columns,

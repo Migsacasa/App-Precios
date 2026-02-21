@@ -47,7 +47,7 @@ export default async function StoresPage() {
       <h1 className="text-xl font-semibold">Imported Stores</h1>
 
       {error && (
-        <div className="p-4 text-sm text-red-600 bg-red-50 dark:bg-red-900/20 rounded">
+        <div className="p-4 text-sm text-red-600 bg-red-50 rounded">
           {error}
         </div>
       )}

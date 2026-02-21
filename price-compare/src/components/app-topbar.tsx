@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Menu } from "lucide-react";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { SyncStatus } from "@/components/offline/SyncStatus";
 
 function toInputDate(value?: string | null) {
@@ -21,12 +20,7 @@ export function AppTopbar({ onMenuToggle }: { onMenuToggle?: () => void }) {
   const [from, setFrom] = useState(toInputDate(searchParams.get("from")));
   const [to, setTo] = useState(toInputDate(searchParams.get("to")));
   const [city, setCity] = useState(searchParams.get("city") ?? "");
-
-  useEffect(() => {
-    setFrom(toInputDate(searchParams.get("from")));
-    setTo(toInputDate(searchParams.get("to")));
-    setCity(searchParams.get("city") ?? "");
-  }, [searchParams]);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
   const showFilters = useMemo(
     () => ["/dashboard", "/reports", "/map"].some((prefix) => pathname.startsWith(prefix)),
@@ -49,6 +43,7 @@ export function AppTopbar({ onMenuToggle }: { onMenuToggle?: () => void }) {
 
     const query = params.toString();
     router.replace(query ? `${pathname}?${query}` : pathname);
+    setMobileFiltersOpen(false);
   };
 
   const clearFilters = () => {
@@ -56,6 +51,7 @@ export function AppTopbar({ onMenuToggle }: { onMenuToggle?: () => void }) {
     ["from", "to", "city"].forEach((key) => params.delete(key));
     const query = params.toString();
     router.replace(query ? `${pathname}?${query}` : pathname);
+    setMobileFiltersOpen(false);
   };
 
   const dateRangeError = from && to && new Date(from) > new Date(to);
@@ -82,13 +78,25 @@ export function AppTopbar({ onMenuToggle }: { onMenuToggle?: () => void }) {
           </div>
           <div className="flex items-center gap-2">
             <SyncStatus />
-            <ThemeToggle />
           </div>
         </div>
 
         {showFilters && (
           <div className="space-y-1">
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
+            <button
+              type="button"
+              className="md:hidden w-full rounded border px-3 py-2 text-sm hover:bg-foreground/5 transition-colors"
+              onClick={() => setMobileFiltersOpen((open) => !open)}
+              aria-expanded={mobileFiltersOpen}
+              aria-controls="topbar-filters"
+            >
+              {mobileFiltersOpen ? "Hide filters" : "Show filters"}
+            </button>
+
+            <div
+              id="topbar-filters"
+              className={`${mobileFiltersOpen ? "grid" : "hidden"} grid-cols-1 md:grid md:grid-cols-5 gap-2`}
+            >
               <div>
                 <label htmlFor="filter-from" className="sr-only">From date</label>
                 <input
@@ -127,7 +135,7 @@ export function AppTopbar({ onMenuToggle }: { onMenuToggle?: () => void }) {
               </button>
             </div>
             {dateRangeError && (
-              <p className="text-xs text-red-500">"From" date must be before "To" date.</p>
+              <p className="text-xs text-red-500">&quot;From&quot; date must be before &quot;To&quot; date.</p>
             )}
           </div>
         )}

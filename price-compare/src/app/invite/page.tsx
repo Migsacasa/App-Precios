@@ -21,7 +21,7 @@ interface Invitation {
 }
 
 export default function InvitePage() {
-  const { data: session, status: authStatus } = useSession();
+  const { status: authStatus } = useSession();
   const [inviteType, setInviteType] = useState<InviteType>("whatsapp");
   const [target, setTarget] = useState("");
   const [message, setMessage] = useState("");
@@ -57,7 +57,7 @@ export default function InvitePage() {
     setSending(true);
 
     try {
-      const data = await apiFetchJson<{ whatsappUrl?: string }>("/api/invite", {
+      const data = await apiFetchJson<{ whatsappUrl?: string; mailtoUrl?: string }>("/api/invite", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -72,10 +72,15 @@ export default function InvitePage() {
         window.open(data.whatsappUrl, "_blank", "noopener,noreferrer");
       }
 
+      // For Email, open default mail app/client
+      if (inviteType === "email" && data.mailtoUrl) {
+        window.open(data.mailtoUrl, "_blank", "noopener,noreferrer");
+      }
+
       setSuccess(
         inviteType === "whatsapp"
           ? "WhatsApp invite opened! Send the message in the WhatsApp window."
-          : `Invitation recorded for ${target.trim()}`
+          : "Email draft opened in your mail app/client."
       );
       setTarget("");
       setMessage("");

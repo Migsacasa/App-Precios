@@ -7,11 +7,11 @@ import { ManagerOverrideForm } from "@/components/dashboard/manager-override-for
 
 function ratingBadge(rating: string) {
   const map: Record<string, string> = {
-    GOOD: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
-    REGULAR: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
-    BAD: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
-    NEEDS_REVIEW: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400",
-    PENDING: "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300",
+    GOOD: "bg-green-100 text-green-800",
+    REGULAR: "bg-yellow-100 text-yellow-800",
+    BAD: "bg-red-100 text-red-800",
+    NEEDS_REVIEW: "bg-orange-100 text-orange-800",
+    PENDING: "bg-gray-100 text-gray-800",
   };
   return map[rating] ?? "bg-gray-100 text-gray-800";
 }
@@ -92,7 +92,7 @@ export default async function StoreDetailPage({
           </div>
 
           {latest?.aiConfidence != null && latest.aiConfidence < 0.35 && (
-            <div className="rounded border border-orange-300 bg-orange-50 dark:bg-orange-900/20 p-2 text-xs text-orange-800 dark:text-orange-300">
+            <div className="rounded border border-orange-300 bg-orange-50 p-2 text-xs text-orange-800">
               Low confidence — manager review recommended.
             </div>
           )}
@@ -110,6 +110,7 @@ export default async function StoreDetailPage({
             <div className="flex gap-2 overflow-x-auto">
               {latest.photos.map((photo) => (
                 <a key={photo.id} href={photo.url} target="_blank" rel="noopener noreferrer">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={photo.url} alt={photo.photoType ?? "Photo"} className="h-20 rounded border object-cover" />
                 </a>
               ))}
@@ -126,9 +127,9 @@ export default async function StoreDetailPage({
               {latest.aiFindings.map((e) => (
                 <div key={e.id} className="flex gap-2 items-start">
                   <span className={`text-xs px-1.5 py-0.5 rounded font-medium shrink-0 ${
-                    e.severity === "HIGH" ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" :
-                    e.severity === "MEDIUM" ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400" :
-                    "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
+                    e.severity === "HIGH" ? "bg-red-100 text-red-700" :
+                    e.severity === "MEDIUM" ? "bg-yellow-100 text-yellow-700" :
+                    "bg-gray-100 text-gray-600"
                   }`}>
                     {e.type}
                   </span>

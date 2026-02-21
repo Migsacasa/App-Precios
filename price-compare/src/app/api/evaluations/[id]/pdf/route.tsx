@@ -7,6 +7,26 @@ import { renderToStream } from "@react-pdf/renderer";
 
 export const runtime = "nodejs";
 
+type AiOutputJson = {
+  summary?: unknown;
+  whyBullets?: unknown;
+  evidence?: unknown;
+  recommendations?: unknown;
+};
+
+type AiEvidence = {
+  type?: string;
+  severity?: string;
+  detail?: string;
+  segment?: string | null;
+};
+
+type AiRecommendation = {
+  priority?: string;
+  action?: string;
+  rationale?: string | null;
+};
+
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     await requireManager();
@@ -27,7 +47,11 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
     if (!ev) return jsonError(req, { code: "NOT_FOUND", message: "Not found" }, 404);
 
-    const json: any = ev.aiEvaluation?.outputJson ?? {};
+    const json = (ev.aiEvaluation?.outputJson ?? {}) as AiOutputJson;
+    const evidence = Array.isArray(json.evidence) ? (json.evidence as AiEvidence[]) : [];
+    const recommendations = Array.isArray(json.recommendations)
+      ? (json.recommendations as AiRecommendation[])
+      : [];
     const data: PdfData = {
       store: {
         customerCode: ev.store.customerCode,
@@ -55,17 +79,17 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         priceIndex: x.priceIndex?.toString() ?? null,
       })),
       ai: {
-        summary: json.summary ?? null,
-        whyBullets: json.whyBullets ?? null,
-        evidence: (json.evidence ?? []).map((e: any) => ({
-          type: e.type,
-          severity: e.severity,
-          detail: e.detail,
+        summary: typeof json.summary === "string" ? json.summary : null,
+        whyBullets: Array.isArray(json.whyBullets) ? json.whyBullets.filter((x): x is string => typeof x === "string") : null,
+        evidence: evidence.map((e) => ({
+          type: e.type ?? "OTHER",
+          severity: e.severity ?? "LOW",
+          detail: e.detail ?? "",
           segment: e.segment ?? null,
         })),
-        recommendations: (json.recommendations ?? []).map((r: any) => ({
-          priority: r.priority,
-          action: r.action,
+        recommendations: recommendations.map((r) => ({
+          priority: r.priority ?? "P2",
+          action: r.action ?? "",
           rationale: r.rationale ?? null,
         })),
       },
@@ -73,7 +97,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
     const stream = await renderToStream(<StoreEvaluationPdf data={data} />);
 
-    return new NextResponse(stream as any, {
+    return new NextResponse(stream as unknown as BodyInit, {
       headers: withRequestIdHeader(req, {
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="evaluation-${id}.pdf"`,

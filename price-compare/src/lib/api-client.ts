@@ -34,16 +34,19 @@ export async function apiFetchJson<T>(input: RequestInfo | URL, init?: RequestIn
   const response = await fetch(input, init);
   const requestId = response.headers.get("x-request-id") ?? undefined;
 
-  let json: any = null;
+  let json: unknown = null;
   if (isJsonResponse(response)) {
     json = await response.json().catch(() => null);
   }
 
   if (!response.ok) {
-    const envelopeError = json?.error;
+    const payload = (json && typeof json === "object") ? (json as Record<string, unknown>) : null;
+    const envelopeError = payload?.error && typeof payload.error === "object"
+      ? (payload.error as Record<string, unknown>)
+      : null;
     const message =
       (typeof envelopeError?.message === "string" && envelopeError.message) ||
-      (typeof json?.error === "string" && json.error) ||
+      (typeof payload?.error === "string" && payload.error) ||
       response.statusText ||
       "Request failed";
 
@@ -51,7 +54,7 @@ export async function apiFetchJson<T>(input: RequestInfo | URL, init?: RequestIn
       message,
       status: response.status,
       code: typeof envelopeError?.code === "string" ? envelopeError.code : undefined,
-      requestId: typeof json?.requestId === "string" ? json.requestId : requestId,
+      requestId: typeof payload?.requestId === "string" ? payload.requestId : requestId,
       details: envelopeError?.details,
     });
   }

@@ -25,7 +25,7 @@ export default async function NewObservationPage() {
   ]);
 
   return (
-    <div className="max-w-2xl mx-auto p-6 space-y-4">
+    <div className="w-full space-y-4 md:max-w-2xl md:mx-auto">
       <h1 className="text-xl font-semibold">Store Evaluation Capture</h1>
       <NewObservationForm
         initialStores={stores.map((store) => ({

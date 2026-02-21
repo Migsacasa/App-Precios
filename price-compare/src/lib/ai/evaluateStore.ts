@@ -56,6 +56,7 @@ export async function evaluateStoreWithVisionLLM(args: {
 }
 
 // Replace this with your real model call
-async function fakeProviderCall(_: any): Promise<string> {
+async function fakeProviderCall(input: unknown): Promise<string> {
+  void input;
   throw new Error("Implement vision provider call");
 }

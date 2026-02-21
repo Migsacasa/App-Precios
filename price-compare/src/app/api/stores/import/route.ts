@@ -10,7 +10,12 @@ type CsvRow = {
   lng: number;
 };
 
-function parseCsvLine(line: string) {
+type ParseResult = {
+  rows: CsvRow[];
+  errors: string[];
+};
+
+function parseCsvLine(line: string, delimiter: "," | ";") {
   const out: string[] = [];
   let current = "";
   let inQuotes = false;
@@ -27,7 +32,7 @@ function parseCsvLine(line: string) {
       inQuotes = !inQuotes;
       continue;
     }
-    if (char === "," && !inQuotes) {
+    if (char === delimiter && !inQuotes) {
       out.push(current.trim());
       current = "";
       continue;
@@ -39,49 +44,94 @@ function parseCsvLine(line: string) {
   return out;
 }
 
-function parseCsv(text: string): CsvRow[] {
+function normalizeHeader(value: string) {
+  return value
+    .replace(/^\uFEFF/, "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_-]+/g, "");
+}
+
+function resolveHeaderIndex(headers: string[], aliases: string[]) {
+  const normalizedAliases = aliases.map((alias) => normalizeHeader(alias));
+  return headers.findIndex((header) => normalizedAliases.includes(normalizeHeader(header)));
+}
+
+function parseCoordinate(raw: string, label: "lat" | "lng", rowNumber: number) {
+  const normalized = raw.trim().replace(",", ".");
+  const value = Number(normalized);
+
+  if (!Number.isFinite(value)) {
+    throw new Error(`Row ${rowNumber}: ${label} must be a valid number`);
+  }
+
+  return value;
+}
+
+function parseCsv(text: string): ParseResult {
   const lines = text
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
 
-  if (!lines.length) return [];
+  if (!lines.length) return { rows: [], errors: [] };
 
-  const headers = parseCsvLine(lines[0]).map((h) => h.trim());
+  const headerLine = lines[0];
+  const semicolonCount = (headerLine.match(/;/g) ?? []).length;
+  const commaCount = (headerLine.match(/,/g) ?? []).length;
+  const delimiter: "," | ";" = semicolonCount > commaCount ? ";" : ",";
+
+  const headers = parseCsvLine(headerLine, delimiter).map((h) => h.trim());
   const index = {
-    customerCode: headers.indexOf("customerCode"),
-    name: Math.max(headers.indexOf("name"), headers.indexOf("customerName")),
-    lat: headers.indexOf("lat"),
-    lng: headers.indexOf("lng"),
+    customerCode: resolveHeaderIndex(headers, [
+      "customerCode",
+      "customer_code",
+      "codigo",
+      "codigo_cliente",
+      "storeCode",
+    ]),
+    name: resolveHeaderIndex(headers, ["name", "customerName", "storeName", "tienda", "nombre"]),
+    lat: resolveHeaderIndex(headers, ["lat", "latitude", "latitud"]),
+    lng: resolveHeaderIndex(headers, ["lng", "lon", "long", "longitude", "longitud"]),
   };
 
   if (index.customerCode < 0 || index.name < 0 || index.lat < 0 || index.lng < 0) {
-    throw new Error("CSV must include headers: customerCode, name (or customerName), lat, lng");
+    throw new Error(
+      `CSV must include customer code, name, lat, and lng columns. Found headers: ${headers.join(", ") || "(none)"}`,
+    );
   }
 
   const rows: CsvRow[] = [];
+  const errors: string[] = [];
 
   for (let i = 1; i < lines.length; i++) {
-    const cols = parseCsvLine(lines[i]);
-    const customerCode = cols[index.customerCode]?.trim();
-    const name = cols[index.name]?.trim();
-    const lat = Number(cols[index.lat]);
-    const lng = Number(cols[index.lng]);
+    try {
+      const cols = parseCsvLine(lines[i], delimiter);
+      const customerCode = cols[index.customerCode]?.trim();
+      const name = cols[index.name]?.trim();
 
-    if (!customerCode || !name) {
-      throw new Error(`Row ${i + 1}: customerCode and name are required`);
-    }
-    if (!Number.isFinite(lat) || lat < -90 || lat > 90) {
-      throw new Error(`Row ${i + 1}: lat must be between -90 and 90`);
-    }
-    if (!Number.isFinite(lng) || lng < -180 || lng > 180) {
-      throw new Error(`Row ${i + 1}: lng must be between -180 and 180`);
-    }
+      if (!customerCode || !name) {
+        throw new Error(`Row ${i + 1}: customerCode and name are required`);
+      }
 
-    rows.push({ customerCode, name, lat, lng });
+      const lat = parseCoordinate(cols[index.lat] ?? "", "lat", i + 1);
+      const lng = parseCoordinate(cols[index.lng] ?? "", "lng", i + 1);
+
+      if (lat < -90 || lat > 90) {
+        throw new Error(`Row ${i + 1}: lat must be between -90 and 90`);
+      }
+      if (lng < -180 || lng > 180) {
+        throw new Error(`Row ${i + 1}: lng must be between -180 and 180`);
+      }
+
+      rows.push({ customerCode, name, lat, lng });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : `Row ${i + 1}: invalid data`;
+      errors.push(message);
+    }
   }
 
-  return rows;
+  return { rows, errors };
 }
 
 export async function POST(req: Request) {
@@ -96,7 +146,19 @@ export async function POST(req: Request) {
     }
 
     const text = await file.text();
-    const rows = parseCsv(text);
+    const { rows, errors } = parseCsv(text);
+
+    if (!rows.length) {
+      return jsonError(
+        req,
+        {
+          code: "IMPORT_FAILED",
+          message: "No valid rows found in CSV",
+          details: { errors },
+        },
+        400,
+      );
+    }
 
     let created = 0;
     let updated = 0;
@@ -128,13 +190,18 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json(
-      { ok: true, created, updated, total: rows.length },
+      { ok: true, created, updated, total: rows.length, skipped: errors.length, errors },
       { headers: withRequestIdHeader(req) },
     );
   } catch (error) {
     if (error instanceof SecurityError) {
       return jsonError(req, { code: "SECURITY_ERROR", message: error.message }, error.status);
     }
+
+    console.error("Store CSV import error", {
+      requestId: req.headers.get("x-request-id") ?? null,
+      error,
+    });
 
     const message = error instanceof Error ? error.message : "Import failed";
     return jsonError(req, { code: "IMPORT_FAILED", message }, 400);

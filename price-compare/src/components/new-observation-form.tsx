@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { apiFetchJson, showApiErrorToast } from "@/lib/api-client";
+import { ApiClientError, apiFetchJson, showApiErrorToast } from "@/lib/api-client";
 import { countPending, enqueueObservation, syncPending } from "@/lib/offline-db";
 import { checkImageQuality, compressImage, type ImageQualityReport } from "@/lib/image-quality";
 import { toast } from "sonner";
@@ -66,10 +66,10 @@ function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: numbe
 
 function ratingBadge(rating: string) {
   const map: Record<string, string> = {
-    GOOD: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
-    REGULAR: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
-    BAD: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
-    NEEDS_REVIEW: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400",
+    GOOD: "bg-green-100 text-green-800",
+    REGULAR: "bg-yellow-100 text-yellow-800",
+    BAD: "bg-red-100 text-red-800",
+    NEEDS_REVIEW: "bg-orange-100 text-orange-800",
   };
   return map[rating] ?? "bg-gray-100 text-gray-800";
 }
@@ -243,6 +243,7 @@ export function NewObservationForm({
     setAnalyzing(true);
     try {
       const formData = new FormData();
+      if (storeId) formData.append("storeId", storeId);
       filledPhotos.forEach((p, idx) => {
         const blob = p.compressed ?? p.file!;
         formData.append(idx === 0 ? "photo" : `photo_${idx}`, blob, `photo_${idx}.jpg`);
@@ -256,6 +257,16 @@ export function NewObservationForm({
       setAnalysis(data.analysis);
       toast.success("AI review complete");
     } catch (error) {
+      if (error instanceof ApiClientError && error.code === "AI_NOT_CONFIGURED") {
+        toast.info("AI analysis is currently unavailable. You can continue and save the evaluation without AI.");
+        return;
+      }
+
+      if (error instanceof ApiClientError && error.code === "AI_QUOTA_EXCEEDED") {
+        toast.warning("AI quota exceeded. You can still save the evaluation without AI analysis.");
+        return;
+      }
+
       showApiErrorToast(toast, error, "AI analysis failed");
     } finally {
       setAnalyzing(false);
@@ -365,7 +376,7 @@ export function NewObservationForm({
   return (
     <form onSubmit={onSubmit} className="space-y-5 border rounded-xl p-4 md:p-6">
       {/* PII Warning Banner */}
-      <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-700 p-3 text-sm text-amber-800 dark:text-amber-300">
+      <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
         <strong>Privacy notice:</strong> Avoid capturing personally identifiable information (faces, license plates, ID cards) in photos. AI analysis may detect and flag PII automatically.
       </div>
 
@@ -428,6 +439,7 @@ export function NewObservationForm({
               onChange={(e) => handlePhotoChange(idx, e.target.files?.[0] ?? null)}
             />
             {slot.file && (
+              // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={URL.createObjectURL(slot.file)}
                 alt={`Preview ${idx + 1}`}
@@ -435,7 +447,7 @@ export function NewObservationForm({
               />
             )}
             {slot.quality && !slot.quality.ok && (
-              <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded p-2 text-xs text-yellow-800 dark:text-yellow-300">
+              <div className="bg-yellow-50 border border-yellow-200 rounded p-2 text-xs text-yellow-800">
                 {slot.quality.issues.map((issue, j) => (
                   <p key={j}>⚠ {issue.message}</p>
                 ))}
@@ -454,7 +466,7 @@ export function NewObservationForm({
         </button>
 
         {hasQualityIssues && (
-          <p className="text-xs text-yellow-700 dark:text-yellow-400">Some photos have quality issues. Consider retaking for better AI results.</p>
+          <p className="text-xs text-yellow-700">Some photos have quality issues. Consider retaking for better AI results.</p>
         )}
 
         {/* AI Analysis Results */}
@@ -511,7 +523,7 @@ export function NewObservationForm({
             )}
 
             {analysis.confidence < 0.35 && (
-              <div className="rounded border border-orange-300 bg-orange-50 dark:bg-orange-900/20 p-2 text-xs text-orange-800 dark:text-orange-300">
+              <div className="rounded border border-orange-300 bg-orange-50 p-2 text-xs text-orange-800">
                 ⚠ Low confidence — a manager should review this evaluation.
               </div>
             )}

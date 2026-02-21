@@ -137,6 +137,7 @@ export function HeatMap({ points }: { points: HeatPoint[] }) {
                 <div className="flex gap-1 overflow-x-auto">
                   {selected.photoUrls.map((url, i) => (
                     <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={url} alt={`Photo ${i + 1}`} className="h-16 rounded border object-cover" />
                     </a>
                   ))}

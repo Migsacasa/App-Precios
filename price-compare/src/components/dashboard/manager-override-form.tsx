@@ -9,9 +9,9 @@ const RATING_OPTIONS = ["GOOD", "REGULAR", "BAD"] as const;
 
 function ratingBadge(rating: string) {
   const map: Record<string, string> = {
-    GOOD: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 border-green-300",
-    REGULAR: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400 border-yellow-300",
-    BAD: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 border-red-300",
+    GOOD: "bg-green-100 text-green-800 border-green-300",
+    REGULAR: "bg-yellow-100 text-yellow-800 border-yellow-300",
+    BAD: "bg-red-100 text-red-800 border-red-300",
   };
   return map[rating] ?? "";
 }

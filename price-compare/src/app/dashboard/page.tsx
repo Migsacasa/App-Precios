@@ -5,17 +5,36 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { TrendChart } from "@/components/dashboard/TrendChart";
 import { CategoryBar } from "@/components/dashboard/CategoryBar";
+import { RatingMixChart } from "@/components/dashboard/rating-mix-chart";
+import { ConfidenceBucketsChart } from "@/components/dashboard/confidence-buckets-chart";
+import { SubScoreChart } from "@/components/dashboard/subscore-chart";
+import { getScoringThresholds } from "@/lib/settings";
 
 function dateKey(date: Date) {
   return date.toISOString().slice(0, 10);
 }
 
+function getSubScores(outputJson: unknown): { visibility: number; shelfShare: number; placement: number; availability: number } | null {
+  if (!outputJson || typeof outputJson !== "object") return null;
+  const subScores = (outputJson as { subScores?: unknown }).subScores;
+  if (!subScores || typeof subScores !== "object") return null;
+
+  const raw = subScores as Record<string, unknown>;
+  const visibility = typeof raw.visibility === "number" ? raw.visibility : null;
+  const shelfShare = typeof raw.shelfShare === "number" ? raw.shelfShare : null;
+  const placement = typeof raw.placement === "number" ? raw.placement : null;
+  const availability = typeof raw.availability === "number" ? raw.availability : null;
+
+  if (visibility == null || shelfShare == null || placement == null || availability == null) return null;
+  return { visibility, shelfShare, placement, availability };
+}
+
 function ratingBadge(rating: string) {
   const map: Record<string, string> = {
-    GOOD: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
-    REGULAR: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
-    BAD: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
-    NEEDS_REVIEW: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400",
+    GOOD: "bg-green-100 text-green-800",
+    REGULAR: "bg-yellow-100 text-yellow-800",
+    BAD: "bg-red-100 text-red-800",
+    NEEDS_REVIEW: "bg-orange-100 text-orange-800",
   };
   return map[rating] ?? "bg-gray-100 text-gray-800";
 }
@@ -40,9 +59,18 @@ export default async function DashboardPage({
   const to = params?.to ? new Date(params.to) : now;
   const city = params?.city;
 
+  const thresholds = await getScoringThresholds();
+
   let stores: Awaited<ReturnType<typeof prisma.store.findMany>> = [];
   let evaluations: Awaited<ReturnType<typeof prisma.evaluation.findMany<{
-    include: { store: true; photos: true; segmentIndices: true; aiFindings: true; aiRecommendations: true };
+    include: {
+      store: true;
+      photos: true;
+      segmentIndices: true;
+      aiFindings: true;
+      aiRecommendations: true;
+      aiEvaluation: true;
+    };
   }>>> = [];
 
   try {
@@ -59,6 +87,7 @@ export default async function DashboardPage({
           segmentIndices: true,
           aiFindings: true,
           aiRecommendations: true,
+          aiEvaluation: true,
         },
         orderBy: { capturedAt: "desc" },
         take: 5000,
@@ -69,7 +98,7 @@ export default async function DashboardPage({
     return (
       <div className="max-w-6xl mx-auto p-6 space-y-4">
         <h1 className="text-xl font-semibold">Manager Dashboard</h1>
-        <div className="p-4 text-sm text-red-600 bg-red-50 dark:bg-red-900/20 rounded">
+        <div className="p-4 text-sm text-red-600 bg-red-50 rounded">
           Could not load dashboard data. Please try again later.
         </div>
       </div>
@@ -128,6 +157,78 @@ export default async function DashboardPage({
     category,
     index: values.length ? Number((values.reduce((acc, value) => acc + value, 0) / values.length).toFixed(1)) : 0,
   }));
+
+  const ratingMix = [
+    { rating: "GOOD", count: good },
+    { rating: "REGULAR", count: regular },
+    { rating: "BAD", count: bad },
+    { rating: "NEEDS_REVIEW", count: needsReview },
+  ];
+
+  const confidences = evaluations
+    .map((evaluation) => evaluation.aiConfidence)
+    .filter((confidence): confidence is number => confidence != null);
+
+  const confidenceBuckets = [
+    {
+      bucket: `<${Math.round(thresholds.needsReviewConfidence * 100)}%`,
+      count: confidences.filter((c) => c < thresholds.needsReviewConfidence).length,
+    },
+    {
+      bucket: `${Math.round(thresholds.needsReviewConfidence * 100)}-${Math.round(thresholds.goodConfidence * 100)}%`,
+      count: confidences.filter((c) => c >= thresholds.needsReviewConfidence && c < thresholds.goodConfidence).length,
+    },
+    {
+      bucket: `>=${Math.round(thresholds.goodConfidence * 100)}%`,
+      count: confidences.filter((c) => c >= thresholds.goodConfidence).length,
+    },
+  ];
+
+  const subScoreSamples = evaluations
+    .map((evaluation) => getSubScores(evaluation.aiEvaluation?.outputJson))
+    .filter((item): item is { visibility: number; shelfShare: number; placement: number; availability: number } => item != null);
+
+  const avgSubScores = subScoreSamples.length
+    ? {
+        visibility: Number((subScoreSamples.reduce((acc, value) => acc + value.visibility, 0) / subScoreSamples.length).toFixed(1)),
+        shelfShare: Number((subScoreSamples.reduce((acc, value) => acc + value.shelfShare, 0) / subScoreSamples.length).toFixed(1)),
+        placement: Number((subScoreSamples.reduce((acc, value) => acc + value.placement, 0) / subScoreSamples.length).toFixed(1)),
+        availability: Number((subScoreSamples.reduce((acc, value) => acc + value.availability, 0) / subScoreSamples.length).toFixed(1)),
+      }
+    : null;
+
+  const subScoreData = avgSubScores
+    ? [
+        { metric: "Visibility", score: avgSubScores.visibility },
+        { metric: "Shelf Share", score: avgSubScores.shelfShare },
+        { metric: "Placement", score: avgSubScores.placement },
+        { metric: "Availability", score: avgSubScores.availability },
+      ]
+    : [];
+
+  const scoredByThreshold = evaluations.filter((evaluation) => evaluation.aiScore != null);
+  const aboveGoodScoreThreshold = scoredByThreshold.filter((evaluation) => (evaluation.aiScore ?? 0) >= thresholds.goodScore).length;
+  const belowBadScoreThreshold = scoredByThreshold.filter((evaluation) => (evaluation.aiScore ?? 0) < thresholds.badScore).length;
+  const belowReviewConfidence = confidences.filter((confidence) => confidence < thresholds.needsReviewConfidence).length;
+  const highConfidence = confidences.filter((confidence) => confidence >= thresholds.goodConfidence).length;
+
+  const weakestSubScore = subScoreData.length
+    ? [...subScoreData].sort((a, b) => a.score - b.score)[0]
+    : null;
+
+  const strongestSubScore = subScoreData.length
+    ? [...subScoreData].sort((a, b) => b.score - a.score)[0]
+    : null;
+
+  const aiSummary = [
+    `Coverage is ${coverage.toFixed(0)}% (${latestByStore.size}/${stores.length} stores), with ${coverage7d.toFixed(0)}% visited in the last 7 days.`,
+    `${total ? ((good / total) * 100).toFixed(1) : "0.0"}% GOOD and ${total ? ((bad / total) * 100).toFixed(1) : "0.0"}% BAD indicate current execution quality.`,
+    `Score thresholds: ${aboveGoodScoreThreshold}/${scoredByThreshold.length} evaluations are >= ${thresholds.goodScore}, while ${belowBadScoreThreshold}/${scoredByThreshold.length} are < ${thresholds.badScore}.`,
+    `Confidence thresholds: ${highConfidence}/${confidences.length} are >= ${(thresholds.goodConfidence * 100).toFixed(0)}%, and ${belowReviewConfidence}/${confidences.length} are below ${(thresholds.needsReviewConfidence * 100).toFixed(0)}% (higher review risk).`,
+    weakestSubScore && strongestSubScore
+      ? `Visibility mix: strongest area is ${strongestSubScore.metric} (${strongestSubScore.score}/25) and weakest is ${weakestSubScore.metric} (${weakestSubScore.score}/25).`
+      : "Visibility mix is not available yet because AI sub-score data is missing.",
+  ];
 
   // Drivers analysis: which evidence types co-occur with BAD ratings
   const driverCounts = new Map<string, number>();
@@ -202,6 +303,22 @@ export default async function DashboardPage({
         <CategoryBar data={byCategory} />
       </div>
 
+      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <RatingMixChart data={ratingMix} />
+        <ConfidenceBucketsChart data={confidenceBuckets} />
+        <SubScoreChart data={subScoreData} />
+      </div>
+
+      <div className="border rounded-lg p-4 space-y-2">
+        <h3 className="text-sm font-semibold">AI Summary (Overall)</h3>
+        <p className="text-xs opacity-60">Threshold-aware summary across score, confidence, and product visibility dimensions.</p>
+        <ul className="list-disc pl-5 space-y-1.5 text-sm">
+          {aiSummary.map((line) => (
+            <li key={line}>{line}</li>
+          ))}
+        </ul>
+      </div>
+
       {/* Drivers Analysis */}
       {drivers.length > 0 && (
         <div className="border rounded-lg p-4 space-y-2">
@@ -229,8 +346,8 @@ export default async function DashboardPage({
             {actionItems.map((item, i) => (
               <div key={i} className="flex items-start gap-2">
                 <span className={`text-xs px-1.5 py-0.5 rounded font-medium shrink-0 ${
-                  item.priority === "high" ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" :
-                  "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                  item.priority === "high" ? "bg-red-100 text-red-700" :
+                  "bg-blue-100 text-blue-700"
                 }`}>
                   {item.priority}
                 </span>
