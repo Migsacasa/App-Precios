@@ -30,9 +30,9 @@ type Analysis = {
   confidence: number;
   summary: string;
   whyBullets: string[];
-  subScores?: { visibility: number; shelfShare: number; placementQuality: number; availability: number };
+  subScores?: { visibility: number; shelfShare: number; placement: number; availability: number };
   evidence?: Array<{ type: string; detail: string; severity: string }>;
-  recommendations?: Array<{ action: string; why: string; expectedImpact: string; priority: string }>;
+  recommendations?: Array<{ priority: string; action: string; rationale?: string }>;
 };
 
 type PhotoSlot = {
@@ -511,7 +511,7 @@ export function NewObservationForm({
                 <p className="font-medium text-xs">Recommendations:</p>
                 {analysis.recommendations.map((item, index) => (
                   <p key={index} className="text-xs">
-                    <b>{item.priority}:</b> {item.action} — {item.why} ({item.expectedImpact})
+                    <b>{item.priority}:</b> {item.action}{item.rationale ? ` — ${item.rationale}` : ""}
                   </p>
                 ))}
               </div>

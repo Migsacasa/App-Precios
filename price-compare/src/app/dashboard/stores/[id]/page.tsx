@@ -57,7 +57,7 @@ export default async function StoreDetailPage({
   const effectiveRating = latest?.overrideRating ?? latest?.aiOverallRating ?? "NO_IMAGE";
   const whyBullets = latest?.aiWhyBullets as string[] | null;
   const evidence = latest?.aiEvidence as Array<{ type: string; detail: string; severity: string }> | null;
-  const recommendations = latest?.aiRecommendations as Array<{ action: string; why: string; expectedImpact: string; priority: string }> | null;
+  const recommendations = latest?.aiRecommendations as Array<{ priority: string; action: string; rationale?: string }> | null;
 
   return (
     <div className="space-y-4 max-w-5xl mx-auto p-6">
@@ -144,12 +144,11 @@ export default async function StoreDetailPage({
               {recommendations.map((r, i) => (
                 <div key={i} className="text-sm">
                   <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${
-                    r.priority === "high" ? "bg-red-100 text-red-700" : "bg-blue-100 text-blue-700"
+                    r.priority === "P0" ? "bg-red-100 text-red-700" : r.priority === "P1" ? "bg-yellow-100 text-yellow-700" : "bg-blue-100 text-blue-700"
                   }`}>
                     {r.priority}
                   </span>{" "}
-                  <b>{r.action}</b> — {r.why}
-                  <span className="text-xs opacity-60"> ({r.expectedImpact})</span>
+                  <b>{r.action}</b>{r.rationale ? ` — ${r.rationale}` : ""}
                 </div>
               ))}
             </div>

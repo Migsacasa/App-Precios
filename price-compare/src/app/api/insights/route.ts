@@ -37,7 +37,7 @@ export async function POST(req: Request) {
 
     const summary = evaluations.map((evaluation) => {
       const json = evaluation.aiJson as
-        | { findings?: string[]; recommendations?: Array<{ action?: string; expectedImpact?: string }> }
+        | { findings?: string[]; recommendations?: Array<{ action?: string; rationale?: string }> }
         | null
         | undefined;
       return {
@@ -51,7 +51,7 @@ export async function POST(req: Request) {
     const findings = summary.flatMap((item) => item.findings).slice(0, 8);
     const recommendations = summary
       .flatMap((item) => item.recommendations)
-      .map((item) => `${item.action ?? "Action"} — ${item.expectedImpact ?? "Impact"}`)
+      .map((item) => `${item.action ?? "Action"}${item.rationale ? ` — ${item.rationale}` : ""}`)
       .slice(0, 8);
 
     return NextResponse.json({

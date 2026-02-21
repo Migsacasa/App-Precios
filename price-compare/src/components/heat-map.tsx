@@ -21,7 +21,7 @@ type HeatPoint = {
   summary?: string | null;
   whyBullets?: string[];
   evidence?: Array<{ type: string; detail: string; severity: string }>;
-  recommendations?: Array<{ action: string; why: string; expectedImpact: string; priority: string }>;
+  recommendations?: Array<{ priority: string; action: string; rationale?: string }>;
   segmentInputs?: Array<{ segment: string; slot: number; priceIndex: number }>;
   photoUrls?: string[];
   overrideRating?: string | null;
@@ -186,7 +186,7 @@ export function HeatMap({ points }: { points: HeatPoint[] }) {
                     {selected.recommendations.map((r, i) => (
                       <p key={i} className="text-xs">
                         <span className={`px-1 py-0.5 rounded font-medium ${
-                          r.priority === "high" ? "bg-red-100 text-red-700" : "bg-blue-100 text-blue-700"
+                          r.priority === "P0" ? "bg-red-100 text-red-700" : r.priority === "P1" ? "bg-yellow-100 text-yellow-700" : "bg-blue-100 text-blue-700"
                         }`}>{r.priority}</span>{" "}
                         {r.action}
                       </p>

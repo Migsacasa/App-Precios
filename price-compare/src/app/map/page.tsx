@@ -47,7 +47,7 @@ export default async function MapPage({
     summary: string | null;
     whyBullets: string[];
     evidence: Array<{ type: string; detail: string; severity: string }>;
-    recommendations: Array<{ action: string; why: string; expectedImpact: string; priority: string }>;
+    recommendations: Array<{ priority: string; action: string; rationale?: string }>;
     segmentInputs: Array<{ segment: string; slot: number; priceIndex: number }>;
     photoUrls: string[];
     overrideRating: string | null;
@@ -108,7 +108,7 @@ export default async function MapPage({
         summary: latest?.aiSummary ?? null,
         whyBullets: (latest?.aiWhyBullets as string[] | null) ?? [],
         evidence: (latest?.aiEvidence as Array<{ type: string; detail: string; severity: string }> | null) ?? [],
-        recommendations: (latest?.aiRecommendations as Array<{ action: string; why: string; expectedImpact: string; priority: string }> | null) ?? [],
+        recommendations: (latest?.aiRecommendations as Array<{ priority: string; action: string; rationale?: string }> | null) ?? [],
         segmentInputs: latest?.segmentInputs?.map((s) => ({ segment: s.segment, slot: s.slot, priceIndex: Number(s.priceIndex) })) ?? [],
         photoUrls: latest?.photos?.map((p) => p.url) ?? [],
         overrideRating: latest?.overrideRating ?? null,

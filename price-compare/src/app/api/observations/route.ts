@@ -8,7 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { saveUpload, UploadValidationError } from "@/lib/upload";
 import { analyzeStorePhotos, analysisSchema } from "@/lib/store-evaluation-ai";
 import { logAudit } from "@/lib/audit";
-import { aiEvaluationOutputSchema } from "@/lib/schemas/evaluation";
+import { AiStoreEvaluationSchema, AI_SCHEMA_VERSION } from "@/lib/schemas/evaluation";
 import type { Prisma, PhotoType } from "@prisma/client";
 
 const slotSchema = z.object({
@@ -26,7 +26,7 @@ const payloadSchema = z.object({
   notes: z.string().optional(),
   gpsAtCaptureLat: z.number().optional(),
   gpsAtCaptureLng: z.number().optional(),
-  ai: aiEvaluationOutputSchema.optional(),
+  ai: AiStoreEvaluationSchema.optional(),
   slots: z.array(slotSchema),
 });
 
@@ -213,7 +213,7 @@ export async function POST(req: NextRequest) {
   const aiRaw = form.get("aiJson");
   if (typeof aiRaw === "string" && aiRaw.trim()) {
     try {
-      const parsed = aiEvaluationOutputSchema.parse(JSON.parse(aiRaw));
+      const parsed = AiStoreEvaluationSchema.parse(JSON.parse(aiRaw));
       aiOverallRating = parsed.rating;
       aiScore = parsed.score;
       aiConfidence = parsed.confidence;
@@ -245,11 +245,12 @@ export async function POST(req: NextRequest) {
       aiConfidence = 0;
       aiSummary = "Photo captured. AI analysis unavailable at save time.";
       aiWhyBullets = ["AI analysis was not available during upload"] as Prisma.InputJsonValue;
-      aiEvidence = [{ type: "general", detail: "Fallback response used", severity: "high" }] as unknown as Prisma.InputJsonValue;
-      aiRecommendations = [{ action: "Review photo later", why: "No real-time AI response", expectedImpact: "Ensure quality feedback" }] as unknown as Prisma.InputJsonValue;
+      aiEvidence = [{ type: "OTHER", detail: "Fallback response used", severity: "HIGH" }] as unknown as Prisma.InputJsonValue;
+      aiRecommendations = [{ priority: "P0", action: "Review photo later — no real-time AI response", rationale: "Ensure quality feedback" }] as unknown as Prisma.InputJsonValue;
       aiJson = {
+        schemaVersion: AI_SCHEMA_VERSION,
         rating: "NEEDS_REVIEW", score: 0, confidence: 0,
-        subScores: { visibility: 0, shelfShare: 0, placementQuality: 0, availability: 0 },
+        subScores: { visibility: 0, shelfShare: 0, placement: 0, availability: 0 },
         summary: aiSummary,
         whyBullets: aiWhyBullets,
         evidence: aiEvidence,

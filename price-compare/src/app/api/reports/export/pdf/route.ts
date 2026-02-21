@@ -58,7 +58,7 @@ export async function GET(req: Request) {
       const effectiveRating = row.overrideRating ?? row.aiOverallRating;
       const whyBullets = row.aiWhyBullets as string[] | null;
       const evidence = row.aiEvidence as Array<{ type: string; detail: string; severity: string }> | null;
-      const recs = row.aiRecommendations as Array<{ action: string; why: string; expectedImpact: string; priority: string }> | null;
+      const recs = row.aiRecommendations as Array<{ priority: string; action: string; rationale?: string }> | null;
 
       // Header line
       pdf.fontSize(10).font("Helvetica-Bold")
@@ -93,7 +93,7 @@ export async function GET(req: Request) {
       if (recs && recs.length > 0) {
         pdf.fontSize(8).text(`  Recommendations:`);
         for (const r of recs) {
-          pdf.text(`    [${r.priority}] ${r.action} — ${r.why}`);
+          pdf.text(`    [${r.priority}] ${r.action}${r.rationale ? ` — ${r.rationale}` : ""}`);
         }
       }
 

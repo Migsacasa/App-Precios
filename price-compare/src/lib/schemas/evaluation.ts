@@ -4,58 +4,197 @@
  *  - AI analysis engine (server)
  *  - API routes (validation)
  *  - Client components (type inference)
+ *
+ * IMPORTANT:
+ * - Keep this schema STRICT to reject unknown keys (auditability + safety).
+ * - Use z.coerce.number() to tolerate numeric strings from LLMs.
  */
 import { z } from "zod";
 
-// ── Evidence item ──────────────────────────────────────────────
-export const evidenceItemSchema = z.object({
-  type: z.enum([
-    "visibility",
-    "shelf_share",
-    "placement",
-    "availability",
-    "signage",
-    "competitor",
-    "general",
-  ]),
-  detail: z.string().min(1),
-  severity: z.enum(["low", "medium", "high"]),
-  confidence: z.number().min(0).max(1).optional(),
-});
+export const AI_SCHEMA_VERSION = "ai.store_eval.v1" as const;
 
-// ── Recommendation ─────────────────────────────────────────────
-export const recommendationSchema = z.object({
-  action: z.string().min(1),
-  why: z.string().min(1),
-  expectedImpact: z.string().min(1),
-  priority: z.enum(["low", "medium", "high"]).optional(),
-});
+export const RatingEnum = z.enum(["GOOD", "REGULAR", "BAD", "NEEDS_REVIEW"]);
+export type Rating = z.infer<typeof RatingEnum>;
+
+export const SegmentEnum = z.enum(["LUBRICANTS", "BATTERIES", "TIRES"]);
+export type Segment = z.infer<typeof SegmentEnum>;
+
+export const RoleEnum = z.enum(["FIELD", "MANAGER", "ADMIN"]);
+export type Role = z.infer<typeof RoleEnum>;
+
+export const EvidenceTypeEnum = z.enum([
+  "VISIBILITY",
+  "SHELF_SHARE",
+  "PLACEMENT",
+  "AVAILABILITY",
+  "BRANDING",
+  "PRICING",
+  "OTHER",
+]);
+export type EvidenceType = z.infer<typeof EvidenceTypeEnum>;
+
+export const SeverityEnum = z.enum(["LOW", "MEDIUM", "HIGH"]);
+export type Severity = z.infer<typeof SeverityEnum>;
+
+export const RecommendationPriorityEnum = z.enum(["P0", "P1", "P2"]);
+export type RecommendationPriority = z.infer<typeof RecommendationPriorityEnum>;
+
+export const PhotoTypeEnum = z.enum(["WIDE_SHOT", "SHELF_CLOSEUP", "OTHER"]);
+export type PhotoType = z.infer<typeof PhotoTypeEnum>;
+
+export const PhotoQualityEnum = z.enum([
+  "OK",
+  "BLURRY",
+  "DARK",
+  "TOO_FAR",
+  "LOW_RES",
+  "OBSTRUCTED",
+  "OTHER_ISSUE",
+]);
+export type PhotoQuality = z.infer<typeof PhotoQualityEnum>;
+
+export const PiiRiskEnum = z.enum(["NONE", "LOW", "MEDIUM", "HIGH"]);
+export type PiiRisk = z.infer<typeof PiiRiskEnum>;
+
+export const FindingTagEnum = z.enum([
+  "LOW_VISIBILITY",
+  "LOW_SHELF_SHARE",
+  "POOR_PLACEMENT",
+  "OUT_OF_STOCK",
+  "COMPETITOR_BLOCKING",
+  "MISSING_SIGNAGE",
+  "PRICE_DISADVANTAGE",
+  "UNCLEAR_IMAGE",
+  "OTHER",
+]);
+export type FindingTag = z.infer<typeof FindingTagEnum>;
 
 // ── Sub-scores ─────────────────────────────────────────────────
-export const subScoresSchema = z.object({
-  visibility: z.number().min(0).max(25),
-  shelfShare: z.number().min(0).max(25),
-  placementQuality: z.number().min(0).max(25),
-  availability: z.number().min(0).max(25),
-});
+export const SubScoresSchema = z
+  .object({
+    // Each 0–25 (ints). Total score should be 0–100.
+    visibility: z.coerce.number().int().min(0).max(25),
+    shelfShare: z.coerce.number().int().min(0).max(25),
+    placement: z.coerce.number().int().min(0).max(25),
+    availability: z.coerce.number().int().min(0).max(25),
+  })
+  .strict();
+
+// ── Evidence item ──────────────────────────────────────────────
+export const EvidenceItemSchema = z
+  .object({
+    type: EvidenceTypeEnum,
+    severity: SeverityEnum,
+    detail: z.string().min(5).max(400),
+
+    // Optional analytics tags for dashboards/drivers.
+    tags: z.array(FindingTagEnum).min(0).max(6).optional(),
+
+    // Optional scoping
+    segment: SegmentEnum.optional(),
+
+    // Optional brand mentions (strings to avoid forcing a fixed ontology)
+    ourBrandsMentioned: z.array(z.string().min(1).max(60)).min(0).max(10).optional(),
+    competitorBrandsMentioned: z.array(z.string().min(1).max(60)).min(0).max(10).optional(),
+  })
+  .strict();
+
+// ── Recommendation ─────────────────────────────────────────────
+export const RecommendationSchema = z
+  .object({
+    priority: RecommendationPriorityEnum,
+    action: z.string().min(5).max(220),
+    rationale: z.string().min(5).max(420).optional(),
+
+    // Who should act
+    ownerRole: RoleEnum.optional(),
+
+    // Optional segment target
+    segment: SegmentEnum.optional(),
+  })
+  .strict();
+
+export const PhotoAssessmentSchema = z
+  .object({
+    photoType: PhotoTypeEnum,
+
+    quality: z
+      .object({
+        overall: PhotoQualityEnum,
+        confidence: z.coerce.number().min(0).max(1).optional(),
+        notes: z.string().min(0).max(250).optional(),
+      })
+      .strict(),
+
+    piiRisk: PiiRiskEnum.default("NONE"),
+  })
+  .strict();
+
+export const DetectedSchema = z
+  .object({
+    ourBrands: z.array(z.string().min(1).max(60)).min(0).max(30).default([]),
+    competitorBrands: z.array(z.string().min(1).max(60)).min(0).max(30).default([]),
+    segmentsSeen: z.array(SegmentEnum).min(0).max(3).default([]),
+  })
+  .strict();
 
 // ── Full AI evaluation output ──────────────────────────────────
-export const aiEvaluationOutputSchema = z.object({
-  rating: z.enum(["GOOD", "REGULAR", "BAD", "NEEDS_REVIEW"]),
-  score: z.number().min(0).max(100),
-  confidence: z.number().min(0).max(1),
-  subScores: subScoresSchema,
-  summary: z.string().min(1),
-  whyBullets: z.array(z.string().min(1)).min(3).max(7),
-  evidence: z.array(evidenceItemSchema).min(1),
-  recommendations: z.array(recommendationSchema).min(1),
-  detectedBrands: z.array(z.string()).optional(),
-});
+export const AiStoreEvaluationSchema = z
+  .object({
+    schemaVersion: z.literal(AI_SCHEMA_VERSION),
 
-export type AiEvaluationOutput = z.infer<typeof aiEvaluationOutputSchema>;
-export type EvidenceItem = z.infer<typeof evidenceItemSchema>;
-export type Recommendation = z.infer<typeof recommendationSchema>;
-export type SubScores = z.infer<typeof subScoresSchema>;
+    rating: RatingEnum,
+    score: z.coerce.number().int().min(0).max(100),
+    confidence: z.coerce.number().min(0).max(1),
+
+    // Subscores should support auditability and score reproducibility.
+    subScores: SubScoresSchema,
+
+    // Human-friendly content for UI.
+    summary: z.string().min(15).max(900),
+    whyBullets: z.array(z.string().min(5).max(220)).min(3).max(8),
+
+    evidence: z.array(EvidenceItemSchema).min(0).max(25),
+    recommendations: z.array(RecommendationSchema).min(1).max(15),
+
+    // Optional signals / metadata
+    detected: DetectedSchema.optional(),
+    photoAssessments: z.array(PhotoAssessmentSchema).min(1).max(3).optional(),
+    limitations: z.array(z.string().min(5).max(220)).min(0).max(6).optional(),
+
+    // Optional language marker for UI (keep optional to reduce LLM failures)
+    language: z.enum(["en", "es"]).optional(),
+  })
+  .strict()
+  .superRefine((val, ctx) => {
+    // Soft integrity check: ensure score matches subscores.
+    const computed =
+      val.subScores.visibility +
+      val.subScores.shelfShare +
+      val.subScores.placement +
+      val.subScores.availability;
+
+    if (val.score !== computed) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["score"],
+        message: `score must equal sum(subScores). Expected ${computed}, got ${val.score}.`,
+      });
+    }
+  });
+
+export type AiStoreEvaluation = z.infer<typeof AiStoreEvaluationSchema>;
+export type EvidenceItem = z.infer<typeof EvidenceItemSchema>;
+export type Recommendation = z.infer<typeof RecommendationSchema>;
+export type SubScores = z.infer<typeof SubScoresSchema>;
+
+// ── Backward-compat aliases so existing imports keep working ───
+export const aiEvaluationOutputSchema = AiStoreEvaluationSchema;
+export type AiEvaluationOutput = AiStoreEvaluation;
+
+export function parseAiStoreEvaluation(input: unknown): AiStoreEvaluation {
+  return AiStoreEvaluationSchema.parse(input);
+}
 
 // ── Scoring thresholds (configurable via AppSettings) ──────────
 export interface ScoringThresholds {
@@ -106,23 +245,3 @@ export interface ImageQualityReport {
     message: string;
   }>;
 }
-
-// ── Legacy compatibility: map old schema to new ────────────────
-export const legacyAnalysisSchema = z.object({
-  overallRating: z.enum(["GOOD", "REGULAR", "BAD"]),
-  summary: z.string().min(1),
-  findings: z.array(z.string()).min(1),
-  recommendations: z.array(
-    z.object({
-      action: z.string().min(1),
-      why: z.string().min(1),
-      expectedImpact: z.string().min(1),
-    }),
-  ),
-  evidence: z.array(
-    z.object({
-      observation: z.string().min(1),
-      confidence: z.number().min(0).max(1),
-    }),
-  ),
-});
