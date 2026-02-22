@@ -43,7 +43,7 @@ export function ManagerOverrideForm({
       await apiFetchJson<{ ok: true; id: string }>(`/api/evaluations/${evaluationId}/override`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ newRating, reason: reason.trim() }),
+        body: JSON.stringify({ rating: newRating, reason: reason.trim() }),
       });
       toast.success("Override applied");
       router.refresh();
